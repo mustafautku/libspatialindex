@@ -1,0 +1,38 @@
+#! /bin/bash
+
+# utku: Query Modes:  [intersection | 10NN | selfjoin | contains]
+
+export capacity=92
+export fillfactor=0.999
+
+export treename="tree${ds}_${dx}_${dy}_${d_dist}_${capacity}"
+export Dtreename="D_${treename}"
+
+echo Querying with R*-Tree $treename  with $queryfile
+# 2>&1 : combines (or called redirect) standard error (stderr) with standard out (stdout)
+# > r  : redirect output to file r with replacing r.  >> : redirect and append to file r.
+
+time ../../test-rtree-RTreeQuery $queryfile ./${ds}/$Dtreename intersection 2>r 1>resultsDyn     #redirect cerr to 'r' AND redirect cout to results...file
+awk '{if ($1 ~ /Time/  || 
+		  $1 ~ /TOTAL/ || 
+		  $1 ~ /Buffer/ || 
+		  ($1 ~ /Index/ && $2 !~ /pool/) || 
+		  ($1 ~ /Leaf/  && $2 !~ /pool/) || 
+		  $1 ~ /Query/ || 
+		  $1 ~ /Reads/ || 
+		  $1 ~ /RtreeName/) print $0}' < r > qDynStatsFile_${qx}_${qy}
+		  
+rm -rf r
+
+mkdir -p ${ds}
+mv  qDynStatsFile_${qx}_${qy} ./${ds}
+
+mkdir -p results
+mv resultsDyn ./results
+
+
+
+
+
+
+

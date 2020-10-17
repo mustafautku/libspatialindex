@@ -1,0 +1,52 @@
+#! /bin/bash
+
+# utku: You may gplot "datafile" and "queryfile" by "GNUPLOT on pltdata, pltquery"  
+# utku: Query Modes:  [intersection | 10NN | selfjoin | contains]
+
+#export ds=20000
+#export sl=0
+#export dx=0.01
+#export dy=0.01
+#export d_dist=f
+#export datafile="data${ds}_${dx}_${dy}_${d_dist}"
+
+export capacity=92
+export fillfactor=0.999
+
+export treename="tree${ds}_${dx}_${dy}_${d_dist}_${capacity}"
+export Dtreename="D_${treename}"
+
+echo Load R*-Tree $treename
+# 2>&1 : combines (or called redirect) standard error (stderr) with standard out (stdout)
+# > r  : redirect std output to file r with replacing r.  >> : redirect and append to file r.
+#time ../../test-rtree-RTreeLoad $datafile $Dtreename $capacity intersection > r 2>&1    # intersection is query type. But we are not sending any query!!
+
+time ../../test-rtree-RTreeLoad $datafile $Dtreename $capacity intersection 2>r 1>pltDynLevel0     #redirect cerr to 'r' AND redirect cout to plt...file
+
+awk '{if ($1 ~ /Time/  || 
+		  $1 ~ /TOTAL/ || 
+		  $1 ~ /Buffer/ || 
+		  $1 ~ /Fill/ || 
+		  ($1 ~ /Index/ && $2 ~ /capacity/) || 
+		  $1 ~ /Utilization/ || 
+		  $1 ~ /Buffer/ || 
+		  $2 ~ /height/ || 
+		  $1 ~ /Number/ || 
+		  $1 ~ /Read/|| 
+		  $1 ~ /Write/|| 
+		  $1 ~ /Level/) print $0}' < r > "${Dtreename}-Loading-Stats"
+rm -rf r
+
+mkdir -p ${ds}    # -p flag: mk dir only if dir does not exist.
+#rm -rf ./${ds}/"${Dtreename}.dat" ./${ds}/"${Dtreename}.idx" ./${ds}/"${Dtreename}-Loading-Stats" 
+mv  "${Dtreename}.dat" "${Dtreename}.idx" "${Dtreename}-Loading-Stats" ./${ds}
+
+
+mkdir -p plt   # -p flag: mk dir only if dir does not exist.
+mv "pltDynLevel0" ./plt
+
+
+
+
+
+

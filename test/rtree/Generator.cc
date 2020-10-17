@@ -29,6 +29,7 @@
 #include <spatialindex/tools/Tools.h>
 #include <cmath>
 #include <limits>
+#include <string>
 
 #include <set>
 
@@ -52,14 +53,23 @@ public:
 
 int main(int argc, char** argv)
 {
-	if (argc != 3)
+	if (argc != 10)
 	{
-		std::cerr << "Usage: " << argv[0] << " number_of_data time_instants." << std::endl;
+		std::cerr << "Usage: " << argv[0] << " ds sl qs d_dx d_dy d_distr. q_dx q_dy q_distr." << std::endl;
 		return -1;
 	}
 
-	size_t simulationLength = atol(argv[2]);
 	size_t numberOfObjects = atol(argv[1]);
+	size_t simulationLength = atol(argv[2]);
+	size_t numberOfQueries = atol(argv[3]);
+	double d_dx = atof(argv[4]);
+	double d_dy = atof(argv[5]);
+	char d_dist=*argv[6];
+
+	double q_dx = atof(argv[7]);
+	double q_dy = atof(argv[8]);
+	char q_dist=*argv[9];
+
 	std::map<size_t, Region> data;
 	Tools::Random rnd;
 
@@ -67,8 +77,20 @@ int main(int argc, char** argv)
 	{
 		double x = rnd.nextUniformDouble();
 		double y = rnd.nextUniformDouble();
-		double dx = rnd.nextUniformDouble(0.0001, 0.1);
-		double dy = rnd.nextUniformDouble(0.0001, 0.1);
+		double dx;
+		double dy;
+		switch (d_dist) {
+		case 'f':  // fix size
+			dx = d_dx;
+			dy = d_dy;
+			break;
+		case 'u':   // uniform dist.
+			dx = rnd.nextUniformDouble(0.001 * d_dx, d_dx);
+			dy = rnd.nextUniformDouble(0.001 * d_dy, d_dy);
+			break;
+		}
+//		double dx = rnd.nextUniformDouble(0.0001, 0.1);
+//		double dy = rnd.nextUniformDouble(0.0001, 0.1);
 		Region r = Region(x, y, x + dx, y + dy);
 
 		data.insert(std::pair<size_t, Region>(i, r));
@@ -79,11 +101,26 @@ int main(int argc, char** argv)
 
 	if (simulationLength == 0)
 	{
-		for (size_t i = 0; i < 1000; i++)
+		for (size_t i = 0; i < numberOfQueries; i++)
 		{
 			double stx = rnd.nextUniformDouble();
 			double sty = rnd.nextUniformDouble();
-			std::cout << QUERY << " 9999999 " << stx << " " << sty << " " << (stx + 0.01) << " " << (sty + 0.01) << std::endl;
+			double qx;
+			double qy;
+			switch (q_dist) {
+			case 'f':  // fix size
+				qx = q_dx;
+				qy = q_dy;
+				break;
+			case 'u':   // uniform dist.
+				qx = rnd.nextUniformDouble(0.001 * q_dx, q_dx);
+				qy = rnd.nextUniformDouble(0.001 * q_dy, q_dy);
+				break;
+			}
+//			std::cout << QUERY << " 9999999 " << stx << " " << sty << " "
+//					<< (stx + 0.01) << " " << (sty + 0.01) << std::endl;
+			std::cout << QUERY << " 9999999 " << stx << " " << sty << " "
+								<< (stx + qx) << " " << (sty + qy) << std::endl;
 		}
 	}
 

@@ -28,6 +28,7 @@
 // NOTE: Please read README.txt before browsing this code.
 
 #include <cstring>
+#include <chrono>
 
 // include library header file.
 #include <spatialindex/SpatialIndex.h>
@@ -52,6 +53,44 @@ public:
 	}
 
 	void visitData(std::vector<const IData*>& /* v */) override {}
+};
+
+
+// Strategy for traversing LEAVES ONLY. write Leaves' MBR to std output, cout. Bash script redirect cout to a "pltDynLevel0" file
+class MyQueryStrategy3: public SpatialIndex::IQueryStrategy {
+
+private:
+	std::queue<id_type> ids;
+
+public:
+	void getNextEntry(const IEntry& entry, id_type& nextEntry, bool& hasNext) {
+		IShape* ps;
+		entry.getShape(&ps);
+		Region* pr = dynamic_cast<Region*>(ps);
+
+		const INode* n = dynamic_cast<const INode*>(&entry);
+		// traverse only index nodes at levels 1 and higher.
+		if (n != 0 && n->getLevel() > 0) {
+			for (uint32_t cChild = 0; cChild < n->getChildrenCount();
+					cChild++) {
+				ids.push(n->getChildIdentifier(cChild));
+			}
+		}
+		else{
+			std::cout << pr->m_pLow[0] << " " << pr->m_pLow[1] << std::endl;
+			std::cout << pr->m_pHigh[0] << " " << pr->m_pLow[1] << std::endl;
+			std::cout << pr->m_pHigh[0] << " " << pr->m_pHigh[1] << std::endl;
+			std::cout << pr->m_pLow[0] << " " << pr->m_pHigh[1] << std::endl;
+			std::cout << pr->m_pLow[0] << " " << pr->m_pLow[1] << std::endl << std::endl;
+		}
+		if (!ids.empty()) {
+					nextEntry = ids.front();
+					ids.pop();
+					hasNext = true;
+		}
+		else hasNext = false;
+		delete ps;
+	}
 };
 
 int main(int argc, char** argv)
@@ -94,6 +133,8 @@ int main(int argc, char** argv)
 		// Create a new, empty, RTree with dimensionality 2, minimum load 70%, using "file" as
 		// the StorageManager and the RSTAR splitting policy.
 		id_type indexIdentifier;
+
+		auto t1 = std::chrono::high_resolution_clock::now(); //utku
 		ISpatialIndex* tree = RTree::createNewRTree(*file, 0.7, atoi(argv[3]), atoi(argv[3]), 2, SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
 
 		size_t count = 0;
@@ -132,10 +173,11 @@ int main(int argc, char** argv)
 					// array of bytes can be inserted in the index (see RTree::Node::load and RTree::Node::store for
 					// an example of how to do that).
 
-				tree->insertData((uint32_t)(data.size() + 1), reinterpret_cast<const uint8_t*>(data.c_str()), r, id);
+				//tree->insertData((uint32_t)(data.size() + 1), reinterpret_cast<const uint8_t*>(data.c_str()), r, id);
 
-				//tree->insertData(0, 0, r, id);
+				tree->insertData(0, 0, r, id);
 					// example of passing zero size and a null pointer as the associated data.
+				//utku: If you do not write some data, capacity=92 holds only 1 4K-disk page. Otherwise, if you write some data 1 node would need >1 disk page.
 			}
 			else if (op == DELETE)
 			{
@@ -193,9 +235,23 @@ int main(int argc, char** argv)
 		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
 		std::cerr << "Index ID: " << indexIdentifier << std::endl;
 
-		bool ret = tree->isIndexValid();
-		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
-		else std::cerr << "The stucture seems O.K." << std::endl;
+		// utku:
+		auto t2 = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+				t2 - t1).count();
+		std::cerr << "Time elapsed (msec) for dynamic loading is : " << duration
+				<< std::endl;
+
+//		bool ret = tree->isIndexValid();
+//		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
+//		else std::cerr << "The stucture seems O.K." << std::endl;
+
+		// New strategy for traversing Leaves Only. I want to plot them w/ gnuplot.
+		// Bunu acarsan RTreload Disk IO numTotalNodes kadar artıyor. Cünkü burda bütün ağacı dolaşıyoruz.!!!
+		MyQueryStrategy3 qs;
+		tree->queryStrategy(qs);
+
+
 
 		delete tree;
 		delete file;

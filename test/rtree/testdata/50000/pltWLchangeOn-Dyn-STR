@@ -1,0 +1,20 @@
+# WL aspect-ratio(qx/qy) change effect on "Dyn tree query performance  ( # of READS)"
+# DS: 50.000
+# dx=dx= 0.01  fix.  Alan: 1e-4
+# Query Set Size=100
+# aspect ration=r= qx/qy changes from   0.01  0.25   1   4   100  
+# qx/qy= 0.001/0.1 ,   0.005/0.02,   0.01/0.01,    0.1/0.001,   0.02/0.005.   Alan== 1e-4   
+
+#gnuplot> set xlabel "En/Boy"
+#gnuplot> set ylabel "Okunan Sayfa Sayisi"
+#gnuplot> set title "Sorgu Veriminin Is Yukune Duyarliligi"
+#gnuplot> set xrange[0.01:100]
+#gnuplot> set logscale x 10                    # veriye göre 10, 2, 4 gibi oynamalar yaparak güzel şekil oluşturabilirsin..
+#gnuplot> plot "pltWLchangeOn-Dyn-STR" using 3:4 w lp title "R*tree", "pltWLchangeOn-Dyn-STR" using 3:5 w lp title "STR-tree"
+
+#qx     qy    	r   	R*tree-disk-IO     STR-tree-disk-io			Adaptif STR-disk-io
+0.001	0.1		0.01		639					566
+0.005	0.02	0.25		367					304
+0.01	0.01	1			349					283
+0.02	0.005	4			379					331
+0.1		0.001	100			677					565

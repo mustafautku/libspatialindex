@@ -23,12 +23,12 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
-******************************************************************************/
+ ******************************************************************************/
 
 // NOTE: Please read README.txt before browsing this code.
-
 // include library header file.
 #include <spatialindex/SpatialIndex.h>
+#include <chrono>
 
 using namespace SpatialIndex;
 
@@ -36,14 +36,13 @@ using namespace SpatialIndex;
 #define DELETE 0
 #define QUERY 2
 
-class MyDataStream : public IDataStream
-{
+class MyDataStream: public IDataStream {
 public:
-	MyDataStream(std::string inputFile) : m_pNext(nullptr)
-	{
+	MyDataStream(std::string inputFile) :
+			m_pNext(nullptr) {
 		m_fin.open(inputFile.c_str());
 
-		if (! m_fin)
+		if (!m_fin)
 			throw Tools::IllegalArgumentException("Input file not found.");
 
 		readNextEntry();
@@ -51,12 +50,14 @@ public:
 
 	~MyDataStream() override
 	{
-		if (m_pNext != nullptr) delete m_pNext;
+		if (m_pNext != nullptr)
+			delete m_pNext;
 	}
 
 	IData* getNext() override
 	{
-		if (m_pNext == nullptr) return nullptr;
+		if (m_pNext == nullptr)
+			return nullptr;
 
 		RTree::Data* ret = m_pNext;
 		m_pNext = nullptr;
@@ -76,8 +77,7 @@ public:
 
 	void rewind() override
 	{
-		if (m_pNext != nullptr)
-		{
+		if (m_pNext != nullptr) {
 			delete m_pNext;
 			m_pNext = nullptr;
 		}
@@ -86,27 +86,26 @@ public:
 		readNextEntry();
 	}
 
-	void readNextEntry()
-	{
+	void readNextEntry() {
 		id_type id;
 		uint32_t op;
 		double low[2], high[2];
 
 		m_fin >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
 
-		if (m_fin.good())
-		{
+		if (m_fin.good()) {
 			if (op != INSERT)
 				throw Tools::IllegalArgumentException(
-					"The data input should contain insertions only."
-				);
+						"The data input should contain insertions only.");
 
 			Region r(low, high, 2);
-			m_pNext = new RTree::Data(sizeof(double), reinterpret_cast<uint8_t*>(low), r, id);
-				// Associate a bogus data array with every entry for testing purposes.
-				// Once the data array is given to RTRee:Data a local copy will be created.
-				// Hence, the input data array can be deleted after this operation if not
-				// needed anymore.
+			m_pNext = new RTree::Data(0, 0, r, id);
+//			m_pNext = new RTree::Data(sizeof(double),
+//					reinterpret_cast<uint8_t*>(low), r, id);
+			// Associate a bogus data array with every entry for testing purposes.
+			// Once the data array is given to RTRee:Data a local copy will be created.
+			// Hence, the input data array can be deleted after this operation if not
+			// needed anymore.
 		}
 	}
 
@@ -114,50 +113,104 @@ public:
 	RTree::Data* m_pNext;
 };
 
-int main(int argc, char** argv)
-{
-	try
-	{
-		if (argc != 5)
-		{
-			std::cerr << "Usage: " << argv[0] << " input_file tree_file capacity utilization." << std::endl;
+// Strategy for traversing LEAVES ONLY. write Leaves' MBR to std output, cout. Bash script redirect cout to a "pltDynLevel0" file
+class MyQueryStrategy3: public SpatialIndex::IQueryStrategy {
+
+private:
+	std::queue<id_type> ids;
+
+public:
+	void getNextEntry(const IEntry& entry, id_type& nextEntry, bool& hasNext) {
+		IShape* ps;
+		entry.getShape(&ps);
+		Region* pr = dynamic_cast<Region*>(ps);
+
+		const INode* n = dynamic_cast<const INode*>(&entry);
+		// traverse only index nodes at levels 1 and higher.
+		if (n != 0 && n->getLevel() > 0) {
+			for (uint32_t cChild = 0; cChild < n->getChildrenCount();
+					cChild++) {
+				ids.push(n->getChildIdentifier(cChild));
+			}
+		}
+		else{
+			std::cout << pr->m_pLow[0] << " " << pr->m_pLow[1] << std::endl;
+			std::cout << pr->m_pHigh[0] << " " << pr->m_pLow[1] << std::endl;
+			std::cout << pr->m_pHigh[0] << " " << pr->m_pHigh[1] << std::endl;
+			std::cout << pr->m_pLow[0] << " " << pr->m_pHigh[1] << std::endl;
+			std::cout << pr->m_pLow[0] << " " << pr->m_pLow[1] << std::endl << std::endl;
+		}
+		if (!ids.empty()) {
+					nextEntry = ids.front();
+					ids.pop();
+					hasNext = true;
+		}
+		else hasNext = false;
+		delete ps;
+	}
+};
+
+int main(int argc, char** argv) {
+	try {
+		if (argc != 5) {
+			std::cerr << "Usage: " << argv[0]
+					<< " input_file tree_file capacity utilization."
+					<< std::endl;
 			return -1;
 		}
 
 		std::string baseName = argv[2];
 		double utilization = atof(argv[4]);
 
-		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(baseName, 4096);
-			// Create a new storage manager with the provided base name and a 4K page size.
+		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(
+				baseName, 4096);
+		// Create a new storage manager with the provided base name and a 4K page size.
 
-		StorageManager::IBuffer* file = StorageManager::createNewRandomEvictionsBuffer(*diskfile, 10, false);
-			// applies a main memory random buffer on top of the persistent storage manager
-			// (LRU buffer, etc can be created the same way).
+		StorageManager::IBuffer* file =
+				StorageManager::createNewRandomEvictionsBuffer(*diskfile, 10,
+						false);
+		// applies a main memory random buffer on top of the persistent storage manager
+		// (LRU buffer, etc can be created the same way).
 
 		MyDataStream stream(argv[1]);
+
+		//utku:
+		auto t1 = std::chrono::high_resolution_clock::now();
 
 		// Create and bulk load a new RTree with dimensionality 2, using "file" as
 		// the StorageManager and the RSTAR splitting policy.
 		id_type indexIdentifier;
-		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(
-			RTree::BLM_STR, stream, *file, utilization, atoi(argv[3]), atoi(argv[3]), 2, SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
+		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(RTree::BLM_STR,
+				stream, *file, utilization, atoi(argv[3]), atoi(argv[3]), 2,
+				SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
 
 		std::cerr << *tree;
 		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
 		std::cerr << "Index ID: " << indexIdentifier << std::endl;
 
-		bool ret = tree->isIndexValid();
-		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
-		else std::cerr << "The stucture seems O.K." << std::endl;
+		auto t2 = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+				t2 - t1).count();
+		std::cerr << "Time elapsed (msec) for STR loading is : " << duration
+				<< std::endl;
+
+//		bool ret = tree->isIndexValid();
+//		if (ret == false)
+//			std::cerr << "ERROR: Structure is invalid!" << std::endl;
+//		else
+//			std::cerr << "The stucture seems O.K." << std::endl;
+
+		// New strategy for traversing Leaves Only. I want to plot them w/ gnuplot.
+		// Bunu acarsan RTreBulkload Disk IO 2 katına çıkıyor. Cünkü burda bütün ağacı dolaşıyoruz.!!!
+		MyQueryStrategy3 qs;
+		tree->queryStrategy(qs);
 
 		delete tree;
 		delete file;
 		delete diskfile;
-			// delete the buffer first, then the storage manager
-			// (otherwise the the buffer will fail trying to write the dirty entries).
-	}
-	catch (Tools::Exception& e)
-	{
+		// delete the buffer first, then the storage manager
+		// (otherwise the the buffer will fail trying to write the dirty entries).
+	} catch (Tools::Exception& e) {
 		std::cerr << "******ERROR******" << std::endl;
 		std::string s = e.what();
 		std::cerr << s << std::endl;

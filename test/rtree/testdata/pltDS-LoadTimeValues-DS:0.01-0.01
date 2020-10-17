@@ -1,0 +1,15 @@
+# ds: 10,20...50.000 için yükleme zamanı grafikleri. Veri dağılımı fix size ve uniform dağılım.
+# STR external sort tampon kullanmadığı için Daik IO yerine, gecikme zamanı esas alındı.
+
+#gnuplot> set xlabel "Veri Seti Buyuklugu"
+#gnuplot> set ylabel "Zaman (msec)"                                              
+#gnuplot> set title "Indeks Yuklenme Gecikmeleri"
+#gnuplot> plot "pltDS-LoadTimeValues-DS:0.01-0.01" using 1:2 with linespoint title "R*-tree", "pltDS-LoadTimeValues-DS:0.01-0.01" using 1:4 with linespoint title "STR-tree"
+
+
+#ds    D-time  D-IO   S-time  S-IO
+10000   2075  19181    53    227
+20000   4600  46179    114   449
+30000   7101  75419    166   670
+40000   9567  105382   224   892
+50000   12330 138549   285   1116

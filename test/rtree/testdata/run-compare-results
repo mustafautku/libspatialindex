@@ -1,0 +1,12 @@
+#! /bin/bash
+echo Comparing results
+sort -n ./results/resultsDyn > a
+sort -n ./results/resultsSTR > b
+if diff a b
+then
+echo "Same results with exhaustive search. Everything seems fine."
+echo Results: `wc -l a`
+rm -rf a b 
+else
+echo "PROBLEM! We got different results from exhaustive search!"
+fi

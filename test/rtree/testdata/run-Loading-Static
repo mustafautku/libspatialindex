@@ -1,0 +1,54 @@
+#! /bin/bash
+
+# utku: You may gplot "datafile" and "queryfile" by "GNUPLOT on pltdata, pltquery"  
+# utku: Query Modes:  [intersection | 10NN | selfjoin | contains]
+
+#export ds=20000
+#export sl=0
+#export dx=0.01
+#export dy=0.01
+#export d_dist=f
+#export datafile="data${ds}_${dx}_${dy}_${d_dist}"
+
+export capacity=92
+export fillfactor=0.999
+
+export treename="tree${ds}_${dx}_${dy}_${d_dist}_${capacity}"
+export Streename="S_${treename}"
+
+echo STR Load R-Tree $treename
+# 2>&1 : combines (or called redirect) standard error (stderr) with standard out (stdout)
+# > r  : redirect output to file r with replacing r.  >> : redirect and append to file r.
+#time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor > r 2>&1  
+
+time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor 2> r 1>pltSTRLevel0  #redirect cerr to 'r' AND redirect cout to plt...file
+
+awk '{if ($1 ~ /Time/  || 
+		  $1 ~ /TOTAL/ || 
+		  $1 ~ /Buffer/ || 
+		  $1 ~ /Fill/ || 
+		  ($1 ~ /Index/ && $2 ~ /capacity/) || 
+		  $1 ~ /Utilization/ || 
+		  $1 ~ /Buffer/ || 
+		  $2 ~ /height/ || 
+		  $1 ~ /Number/ || 
+		  $1 ~ /Read/|| 
+		  $1 ~ /Write/|| 
+		  $1 ~ /Level/) print $0}' < r > "${Streename}-Loading-Stats"
+rm -rf r
+
+mkdir -p ${ds}
+#rm -rf ./${ds}/"${Streename}.dat" ./${ds}/"${Streename}.idx" ./${ds}/"${Streename}-Loading-Stats"
+# mv already replaces..!
+mv  "${Streename}.dat" "${Streename}.idx" "${Streename}-Loading-Stats" ./${ds}
+
+mkdir -p plt   # -p flag: mk dir only if dir does not exist.
+mv "pltSTRLevel0" ./plt
+
+
+
+
+
+
+
+

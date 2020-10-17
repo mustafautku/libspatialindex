@@ -1,0 +1,13 @@
+#! /bin/bash
+
+export ds=50000
+export sl=0
+
+export dx=0.01
+export dy=0.01
+export d_dist=f
+
+. ./run-GenerateData    # . at the beginning makes all exports global in the current shell.
+./run-Loading-Dynamic
+./run-Loading-Static
+

@@ -1,0 +1,25 @@
+#! /bin/bash
+
+echo Generating dataset  #"Usage: ds sl qs d_dx d_dy d_dist q_dx q_dy q_dist" 
+
+export dpostfix="${ds}_${dx}_${dy}_${d_dist}"
+
+export datafile="data${dpostfix}"
+
+time ../../test-rtree-Generator $ds $sl 1 $dx $dy $d_dist 0.1 0.1 f > d   # 1 0.1 0.1 f : dummy values..
+
+awk '{if ($1 != 2) print $0}' < d > $datafile   
+rm -rf d
+
+# plotting requires 4 edge points of MBR
+awk 'BEGIN {}
+{print $3," ",$4; print $5," ",$4; print $5," ",$6; }  # may combine the prints in the same line if you wish.
+{print $3," ",$6; print $3," ",$4; print ""}
+END{}' $datafile > "pltdata"
+
+mkdir -p plt   # -p flag: mk dir only if dir does not exist.
+mv "pltdata" ./plt
+
+
+# you may plot data and query with the following command:
+# gnuplot> plot "pltdata" using 1:2 w l, "pltquery" using 1:2 with lines lw 4
