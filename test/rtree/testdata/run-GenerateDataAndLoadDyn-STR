@@ -6,6 +6,8 @@ export sl=0
 export dx=0.01
 export dy=0.01
 export d_dist=f
+export pS=10000  # Page size (RPB). Used in ext-sort
+export bP=100 # buffer size (num of buffers). Used in ext-sort
 
 . ./run-GenerateData    # . at the beginning makes all exports global in the current shell.
 ./run-Loading-Dynamic

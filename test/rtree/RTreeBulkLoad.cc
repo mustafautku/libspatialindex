@@ -152,15 +152,20 @@ public:
 
 int main(int argc, char** argv) {
 	try {
-		if (argc != 5) {
+		if (argc != 7) {
 			std::cerr << "Usage: " << argv[0]
-					<< " input_file tree_file capacity utilization."
+					<< " input_file tree_file capacity utilization PS BP"  // pS: PageSize(#ofRecords/Block)   bP: Total # of Buffers
 					<< std::endl;
 			return -1;
 		}
 
+		MyDataStream stream(argv[1]);
 		std::string baseName = argv[2];
-		double utilization = atof(argv[4]);
+		uint32_t capacity = atoi(argv[3]);
+		double fillFactor = atof(argv[4]);  // utilization
+		long pS=atol(argv[5]);   // PS
+		long bP=atol(argv[6]);   // BP
+
 
 		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(
 				baseName, 4096);
@@ -172,7 +177,7 @@ int main(int argc, char** argv) {
 		// applies a main memory random buffer on top of the persistent storage manager
 		// (LRU buffer, etc can be created the same way).
 
-		MyDataStream stream(argv[1]);
+
 
 		//utku:
 		auto t1 = std::chrono::high_resolution_clock::now();
@@ -180,9 +185,48 @@ int main(int argc, char** argv) {
 		// Create and bulk load a new RTree with dimensionality 2, using "file" as
 		// the StorageManager and the RSTAR splitting policy.
 		id_type indexIdentifier;
-		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(RTree::BLM_STR,
-				stream, *file, utilization, atoi(argv[3]), atoi(argv[3]), 2,
-				SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
+
+		// Below use default buffer area (pS=10000 and bP=100)
+//		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(RTree::BLM_STR,
+//				stream, *file, utilization, atoi(argv[3]), atoi(argv[3]), 2,
+//				SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
+
+		// Below, we may set up our buffer pool org.
+		Tools::Variant var;
+		Tools::PropertySet ps;
+
+		var.m_varType = Tools::VT_DOUBLE;
+		var.m_val.dblVal = fillFactor;
+		ps.setProperty("FillFactor", var);
+
+		var.m_varType = Tools::VT_ULONG;
+		var.m_val.ulVal = capacity;
+		ps.setProperty("IndexCapacity", var);
+
+		var.m_varType = Tools::VT_ULONG;
+		var.m_val.ulVal = capacity;
+		ps.setProperty("LeafCapacity", var);
+
+		var.m_varType = Tools::VT_ULONG;
+		var.m_val.ulVal = 2;
+		ps.setProperty("Dimension", var);
+
+		var.m_varType = Tools::VT_LONG;
+		var.m_val.lVal = SpatialIndex::RTree::RV_RSTAR ;
+		ps.setProperty("TreeVariant", var);
+
+		var.m_varType = Tools::VT_ULONG;
+		var.m_val.ulVal = pS;
+		ps.setProperty("ExternalSortBufferPageSize", var);
+
+		var.m_varType = Tools::VT_ULONG;
+		var.m_val.ulVal = bP;
+		ps.setProperty("ExternalSortBufferTotalPages", var);
+
+		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(RTree::BLM_STR, stream, *file, ps, indexIdentifier);
+
+
+
 
 		std::cerr << *tree;
 		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
