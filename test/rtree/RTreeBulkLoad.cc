@@ -152,9 +152,9 @@ public:
 
 int main(int argc, char** argv) {
 	try {
-		if (argc != 7) {
-			std::cerr << "Usage: " << argv[0]
-					<< " input_file tree_file capacity utilization PS BP"  // pS: PageSize(#ofRecords/Block)   bP: Total # of Buffers
+		if (argc != 5 && argc != 6 && argc != 8) {
+			std::cerr << "Usage       : " << argv[0]
+					<< " input_file tree_file capacity utilization r PS BP "  // pS: PageSize(#ofRecords/Block)   bP: Total # of Buffers
 					<< std::endl;
 			return -1;
 		}
@@ -163,8 +163,6 @@ int main(int argc, char** argv) {
 		std::string baseName = argv[2];
 		uint32_t capacity = atoi(argv[3]);
 		double fillFactor = atof(argv[4]);  // utilization
-		long pS=atol(argv[5]);   // PS
-		long bP=atol(argv[6]);   // BP
 
 
 		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(
@@ -215,13 +213,30 @@ int main(int argc, char** argv) {
 		var.m_val.lVal = SpatialIndex::RTree::RV_RSTAR ;
 		ps.setProperty("TreeVariant", var);
 
-		var.m_varType = Tools::VT_ULONG;
-		var.m_val.ulVal = pS;
-		ps.setProperty("ExternalSortBufferPageSize", var);
+		if (argc == 6) {
+			var.m_varType = Tools::VT_DOUBLE;
+			var.m_val.dblVal = atof(argv[5]);   // r=qx/qy;
+			ps.setProperty("QueryAspectRatio", var);
+		}
+		if (argc == 8) {
+			var.m_varType = Tools::VT_ULONG;
+			var.m_val.ulVal = atol(argv[6]);  //pS
+			ps.setProperty("ExternalSortBufferPageSize", var);
 
-		var.m_varType = Tools::VT_ULONG;
-		var.m_val.ulVal = bP;
-		ps.setProperty("ExternalSortBufferTotalPages", var);
+			var.m_varType = Tools::VT_ULONG;
+			var.m_val.ulVal = atol(argv[7]);  // bP
+			ps.setProperty("ExternalSortBufferTotalPages", var);
+		} else { // use default values
+			var.m_varType = Tools::VT_ULONG;
+			var.m_val.ulVal = 10000;  //pS
+			ps.setProperty("ExternalSortBufferPageSize", var);
+
+			var.m_varType = Tools::VT_ULONG;
+			var.m_val.ulVal = 100;  // bP
+			ps.setProperty("ExternalSortBufferTotalPages", var);
+		}
+
+
 
 		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(RTree::BLM_STR, stream, *file, ps, indexIdentifier);
 

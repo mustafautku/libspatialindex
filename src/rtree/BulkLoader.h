@@ -113,7 +113,8 @@ namespace SpatialIndex
 				uint32_t bindex,
 				uint32_t bleaf,
 				uint32_t pageSize, // The number of node entries per page.
-				uint32_t numberOfPages // The total number of pages to use.
+				uint32_t numberOfPages, // The total number of pages to use.
+				double r  // qx/qy
 			);
 
 		protected:
@@ -126,7 +127,8 @@ namespace SpatialIndex
 				uint32_t level,
 				std::shared_ptr<ExternalSorter> es2,
 				uint32_t pageSize,
-				uint32_t numberOfPages
+				uint32_t numberOfPages,
+				double r  // qx/qy
 			);
 
 			Node* createNode(

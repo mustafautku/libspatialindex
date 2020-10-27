@@ -19,9 +19,9 @@ export Streename="S_${treename}"
 echo STR Load R-Tree $treename
 # 2>&1 : combines (or called redirect) standard error (stderr) with standard out (stdout)
 # > r  : redirect output to file r with replacing r.  >> : redirect and append to file r.
-#time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor $pS $bP > r 2>&1  
+#time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor $r $pS $bP > r 2>&1  
 
-time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor $pS $bP 2> r 1>pltSTRLevel0  #redirect cerr to 'r' AND redirect cout to plt...file
+time ../../test-rtree-RTreeBulkLoad $datafile $Streename $capacity $fillfactor $qar $pS $bP 2> r 1>pltSTRLevel0  #redirect cerr to 'r' AND redirect cout to plt...file
 
 awk '{if ($1 ~ /Time/  || 
 		  $1 ~ /TOTAL/ || 

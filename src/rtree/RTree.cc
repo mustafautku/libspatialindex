@@ -208,7 +208,7 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	switch (m)
 	{
 	case BLM_STR:
-		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, 10000, 100);
+		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, 10000, 100,1);  // default values
 		break;
 	default:
 		throw Tools::IllegalArgumentException("createAndBulkLoadNewRTree: Unknown bulk load method.");
@@ -233,6 +233,8 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	uint32_t dimension(0);
 	uint32_t pageSize(0);
 	uint32_t numberOfPages(0);
+
+	double r;
 
 	// tree variant
 	var = ps.getProperty("TreeVariant");
@@ -323,7 +325,19 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 		numberOfPages = var.m_val.ulVal;
 	}
 
+	var = ps.getProperty("QueryAspectRatio");
+		if (var.m_varType != Tools::VT_EMPTY) {
+			if (var.m_varType != Tools::VT_DOUBLE)
+				throw Tools::IllegalArgumentException(
+						"createAndBulkLoadNewRTree: Property QueryAspectRatio was not of type Tools::VT_DOUBLE");
+			r = var.m_val.dblVal;
+		}
+
 	SpatialIndex::ISpatialIndex* tree = createNewRTree(sm, fillFactor, indexCapacity, leafCapacity, dimension, rv, indexIdentifier);
+
+	assert(pageSize>10);
+	assert(numberOfPages>10);
+
 
 	uint32_t bindex = static_cast<uint32_t>(std::floor(static_cast<double>(indexCapacity * fillFactor)));
 	uint32_t bleaf = static_cast<uint32_t>(std::floor(static_cast<double>(leafCapacity * fillFactor)));
@@ -333,7 +347,7 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	switch (m)
 	{
 	case BLM_STR:
-		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, pageSize, numberOfPages);
+		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, pageSize, numberOfPages,r);
 		break;
 	default:
 		throw Tools::IllegalArgumentException("createAndBulkLoadNewRTree: Unknown bulk load method.");

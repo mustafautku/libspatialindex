@@ -323,7 +323,8 @@ void BulkLoader::bulkLoadUsingSTR(
 	uint32_t bindex,
 	uint32_t bleaf,
 	uint32_t pageSize,
-	uint32_t numberOfPages
+	uint32_t numberOfPages,
+	double r  // qx/qy
 ) {
 	if (! stream.hasNext())
 		throw Tools::IllegalArgumentException(
@@ -367,7 +368,7 @@ void BulkLoader::bulkLoadUsingSTR(
 		pTree->m_stats.m_nodesInLevel.push_back(0);
 
         std::shared_ptr<ExternalSorter> es2 = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, numberOfPages));
-		createLevel(pTree, es, 0, bleaf, bindex, level++, es2, pageSize, numberOfPages);
+		createLevel(pTree, es, 0, bleaf, bindex, level++, es2, pageSize, numberOfPages,r);
 		es = es2;
 
 		if (es->getTotalEntries() == 1) break;
@@ -387,13 +388,15 @@ void BulkLoader::createLevel(
 	uint32_t level,
 	std::shared_ptr<ExternalSorter> es2,
 	uint32_t pageSize,
-	uint32_t numberOfPages
+	uint32_t numberOfPages,
+	double r  // qx/qy
 ) {
 	uint64_t b = (level == 0) ? bleaf : bindex;
 	uint64_t P = static_cast<uint64_t>(std::ceil(static_cast<double>(es->getTotalEntries()) / static_cast<double>(b)));
 	uint64_t S = static_cast<uint64_t>(std::ceil(std::sqrt(static_cast<double>(P))));
+	S= static_cast<uint64_t>(std::ceil(static_cast<double>(S)*r));   // S*r;
 
-	if (S == 1 || dimension == pTree->m_dimension - 1 || S * b == es->getTotalEntries())
+	if (S == 1 || dimension == pTree->m_dimension - 1 || S * b == es->getTotalEntries())  // utku: 3rd condition is only for data sets with dim>2
 	{
 		std::vector<ExternalSorter::Record*> node;
 		ExternalSorter::Record* r;
@@ -441,7 +444,7 @@ void BulkLoader::createLevel(
 				es3->insert(pR);
 			}
 			es3->sort();
-			createLevel(pTree, es3, dimension + 1, bleaf, bindex, level, es2, pageSize, numberOfPages);
+			createLevel(pTree, es3, dimension + 1, bleaf, bindex, level, es2, pageSize, numberOfPages,r);
 		}
 	}
 }
