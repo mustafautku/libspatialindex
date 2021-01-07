@@ -28,6 +28,10 @@
 // NOTE: Please read README.txt before browsing this code.
 
 #include <cstring>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 // include library header file.
 #include <spatialindex/SpatialIndex.h>
@@ -83,9 +87,13 @@ int main(int argc, char** argv)
 			return -1;
 		}
 
+		struct timeval start_time, end_time;
+		double secs;
+		(void)gettimeofday(&start_time, NULL);
+
 		// Create a new storage manager with the provided base name and a 4K page size.
 		std::string baseName = argv[2];
-		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(baseName, 4096);
+		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(baseName, 32768);
 
 		StorageManager::IBuffer* file = StorageManager::createNewRandomEvictionsBuffer(*diskfile, 10, false);
 			// applies a main memory random buffer on top of the persistent storage manager
@@ -113,9 +121,9 @@ int main(int argc, char** argv)
 				phigh[0] = x2; phigh[1] = y2;
 				Region r = Region(plow, phigh, 2);
 
-				std::ostringstream os;
-				os << r;
-				std::string data = os.str();
+//				std::ostringstream os;
+//				os << r;
+//				std::string data = os.str();
 					// associate some data with this region. I will use a string that represents the
 					// region itself, as an example.
 					// NOTE: It is not necessary to associate any data here. A null pointer can be used. In that
@@ -132,10 +140,10 @@ int main(int argc, char** argv)
 					// array of bytes can be inserted in the index (see RTree::Node::load and RTree::Node::store for
 					// an example of how to do that).
 
-				tree->insertData((uint32_t)(data.size() + 1), reinterpret_cast<const uint8_t*>(data.c_str()), r, id);
+//				tree->insertData((uint32_t)(data.size() + 1), reinterpret_cast<const uint8_t*>(data.c_str()), r, id);
 
-				//tree->insertData(0, 0, r, id);
-					// example of passing zero size and a null pointer as the associated data.
+				tree->insertData(0, 0, r, id);
+//					 example of passing zero size and a null pointer as the associated data.
 			}
 			else if (op == DELETE)
 			{
@@ -187,15 +195,21 @@ int main(int argc, char** argv)
 
 			count++;
 		}
+		(void) gettimeofday(&end_time, NULL);
+		secs = (((double) end_time.tv_sec * 1000000 + end_time.tv_usec)
+				- ((double) start_time.tv_sec * 1000000 + start_time.tv_usec))
+				/ 1000000;
 
-		std::cerr << "Operations: " << count << std::endl;
-		std::cerr << *tree;
-		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
-		std::cerr << "Index ID: " << indexIdentifier << std::endl;
+		printf(" BULK-Load datafile in R*-tree in %.2f seconds: ", secs);
 
-		bool ret = tree->isIndexValid();
-		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
-		else std::cerr << "The stucture seems O.K." << std::endl;
+//		std::cerr << "Operations: " << count << std::endl;
+//		std::cerr << *tree;
+//		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
+//		std::cerr << "Index ID: " << indexIdentifier << std::endl;
+//
+//		bool ret = tree->isIndexValid();
+//		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
+//		else std::cerr << "The stucture seems O.K." << std::endl;
 
 		delete tree;
 		delete file;

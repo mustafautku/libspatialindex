@@ -29,12 +29,16 @@
 #include <spatialindex/tools/Tools.h>
 #include <cmath>
 #include <limits>
+#include <fstream>
+#include <iostream>
 
 #include <set>
 
 #define INSERT 1
 #define DELETE 0
 #define QUERY 2
+
+using namespace std;
 
 class Region
 {
@@ -63,33 +67,57 @@ int main(int argc, char** argv)
 	std::map<size_t, Region> data;
 	Tools::Random rnd;
 
+	ofstream mydatafile;
+	mydatafile.open ("datafile", ios::out);
+
+	ofstream myqueryfile;
+	myqueryfile.open ("queryfile", ios::out);
+//	mydatafile << "Writing this to a file.\n";
+
+
 	for (size_t i = 0; i < numberOfObjects; i++)
 	{
 		double x = rnd.nextUniformDouble();
 		double y = rnd.nextUniformDouble();
-		double dx = rnd.nextUniformDouble(0.0001, 0.1);
-		double dy = rnd.nextUniformDouble(0.0001, 0.1);
-		Region r = Region(x, y, x + dx, y + dy);
+//		double dx = rnd.nextUniformDouble(0.0001, 0.1);
+//		double dy = rnd.nextUniformDouble(0.0001, 0.1);
+//		Region r = Region(x, y, x + dx, y + dy);
+		Region r = Region(x, y, x, y);
+//		data.insert(std::pair<size_t, Region>(i, r));
 
-		data.insert(std::pair<size_t, Region>(i, r));
-
-		std::cout << INSERT << " " << i << " " << r.m_xmin << " " << r.m_ymin << " "
-			<< r.m_xmax << " " << r.m_ymax << std::endl;
+		mydatafile << INSERT << " " << i << " " <<std::setprecision(15) <<  r.m_xmin << " " << std::setprecision(15) << r.m_ymin << " "
+					<< std::setprecision(15) << r.m_xmax << " " << std::setprecision(15) << r.m_ymax << std::endl;
+//		std::cout << INSERT << " " << i << " " << r.m_xmin << " " << r.m_ymin << " "
+//			<< r.m_xmax << " " << r.m_ymax << std::endl;
 	}
 
 	if (simulationLength == 0)
 	{
-		for (size_t i = 0; i < 1000; i++)
-		{
-			double stx = rnd.nextUniformDouble();
-			double sty = rnd.nextUniformDouble();
-			std::cout << QUERY << " 9999999 " << stx << " " << sty << " " << (stx + 0.01) << " " << (sty + 0.01) << std::endl;
-		}
+//		for (size_t i = 0; i < 1000; i++)
+//		{
+//			double stx = rnd.nextUniformDouble();
+//			double sty = rnd.nextUniformDouble();
+//			std::cout << QUERY << " 9999999 " << stx << " " << sty << " " << (stx + 0.01) << " " << (sty + 0.01) << std::endl;
+
+		double xl,yl,xh,yh;
+		do{   // generate a random query within unit area
+			xl = rnd.nextUniformDouble();
+			yl = rnd.nextUniformDouble();
+			double dx = rnd.nextUniformDouble(0.3, 0.4);
+			double dy = rnd.nextUniformDouble(0.3, 0.4);
+			xh=xl+dx;
+			yh=yl+dy;
+		}while(xh>1.0 || yh>1.0);
+		myqueryfile << QUERY << " 9999999 " <<std::setprecision(15) <<  xl << " " << std::setprecision(15) << yl << " " <<std::setprecision(15) <<  xh << " " <<std::setprecision(15) <<  yh << std::endl;
+//		}
 	}
+
+	mydatafile.close();
+	myqueryfile.close();
 
 	size_t A = static_cast<size_t>(std::floor(static_cast<double>(numberOfObjects) * 0.05));
 
-	for (size_t T = 1; T <= simulationLength; T++)
+	for (size_t T = 1; T < simulationLength; T++)
 	{
 		std::cerr << (simulationLength + 1 - T) << std::endl;
 		std::set<size_t> examined;

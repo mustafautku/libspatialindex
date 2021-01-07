@@ -28,6 +28,10 @@
 // NOTE: Please read README.txt before browsing this code.
 
 #include <cstring>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 // include library header file.
 #include <spatialindex/SpatialIndex.h>
@@ -47,9 +51,14 @@ class MyVisitor : public IVisitor
 public:
 	size_t m_indexIO{0};
 	size_t m_leafIO{0};
+	ofstream myresultfile;
+	int rscount;
 
 public:
-    MyVisitor() = default;
+    MyVisitor(){
+    	myresultfile.open ("QryResSet-Rtree", ios::out);
+    	rscount=0;
+    }
 
 	void visitNode(const INode& n) override
 	{
@@ -62,19 +71,22 @@ public:
 		IShape* pS;
 		d.getShape(&pS);
 			// do something.
-		delete pS;
-
+		Region outr;
+		pS->getMBR(outr);
 		// data should be an array of characters representing a Region as a string.
-		uint8_t* pData = nullptr;
-		uint32_t cLen = 0;
-		d.getData(cLen, &pData);
+//		uint8_t* pData = nullptr;
+//		uint32_t cLen = 0;
+//		d.getData(cLen, &pData);
 		// do something.
 		//string s = reinterpret_cast<char*>(pData);
 		//cout << s << endl;
-		delete[] pData;
+//		delete[] pData;
 
-		cout << d.getIdentifier() << endl;
+//		cout << d.getIdentifier() << endl;
+		myresultfile<< d.getIdentifier() <<" "<<std::setprecision(10)<< outr.m_pLow[0]<< " "<< std::setprecision(10)<<outr.m_pLow[1]<<" "<< std::setprecision(10)<<outr.m_pHigh[0]<<" "<< std::setprecision(10)<<outr.m_pHigh[1]<<endl;
 			// the ID of this data entry is an answer to the query. I will just print it to stdout.
+		rscount++;
+		delete pS;
 	}
 
 	void visitData(std::vector<const IData*>& v) override
@@ -191,7 +203,8 @@ int main(int argc, char** argv)
 		// have to specify the index identifier as follows
 		ISpatialIndex* tree = RTree::loadRTree(*file, 1);
 
-		size_t count = 0;
+//		size_t
+		int count = 0;
 		size_t indexIO = 0;
 		size_t leafIO = 0;
 		id_type id;
@@ -199,6 +212,12 @@ int main(int argc, char** argv)
 		double x1, x2, y1, y2;
 		double plow[2], phigh[2];
 
+		struct timeval start_time, end_time;
+		double secs;
+		srand((int)time(NULL));
+		(void) gettimeofday(&start_time, NULL);
+
+		MyVisitor vis;
 		while (fin)
 		{
 			fin >> op >> id >> x1 >> y1 >> x2 >> y2;
@@ -209,7 +228,7 @@ int main(int argc, char** argv)
 				plow[0] = x1; plow[1] = y1;
 				phigh[0] = x2; phigh[1] = y2;
 
-				MyVisitor vis;
+//				MyVisitor vis;
 
 				if (queryType == 0)
 				{
@@ -243,16 +262,23 @@ int main(int argc, char** argv)
 
 			count++;
 		}
+		(void) gettimeofday(&end_time, NULL);
+		secs = (((double) end_time.tv_sec * 1000000 + end_time.tv_usec)
+				- ((double) start_time.tv_sec * 1000000 + start_time.tv_usec))
+												/ 1000000;
+		printf("[STAT] WINDOW QUERY: %d records ", vis.rscount );
+		printf(" in %.2f seconds: ", secs);
+		printf("%.0f records/second\n", (double) count / secs);
 
-		MyQueryStrategy2 qs;
-		tree->queryStrategy(qs);
-
-		cerr << "Indexed space: " << qs.m_indexedSpace << endl;
-		cerr << "Operations: " << count << endl;
-		cerr << *tree;
-		cerr << "Index I/O: " << indexIO << endl;
-		cerr << "Leaf I/O: " << leafIO << endl;
-		cerr << "Buffer hits: " << file->getHits() << endl;
+//		MyQueryStrategy2 qs;
+//		tree->queryStrategy(qs);
+//
+//		cerr << "Indexed space: " << qs.m_indexedSpace << endl;
+//		cerr << "Operations: " << count << endl;
+//		cerr << *tree;
+//		cerr << "Index I/O: " << indexIO << endl;
+//		cerr << "Leaf I/O: " << leafIO << endl;
+//		cerr << "Buffer hits: " << file->getHits() << endl;
 
 		delete tree;
 		delete file;

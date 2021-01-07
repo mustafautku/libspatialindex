@@ -29,6 +29,10 @@
 
 // include library header file.
 #include <spatialindex/SpatialIndex.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 using namespace SpatialIndex;
 
@@ -102,7 +106,8 @@ public:
 				);
 
 			Region r(low, high, 2);
-			m_pNext = new RTree::Data(sizeof(double), reinterpret_cast<uint8_t*>(low), r, id);
+			m_pNext = new RTree::Data(0, 0, r, id);
+//			m_pNext = new RTree::Data(sizeof(double), reinterpret_cast<uint8_t*>(low), r, id);
 				// Associate a bogus data array with every entry for testing purposes.
 				// Once the data array is given to RTRee:Data a local copy will be created.
 				// Hence, the input data array can be deleted after this operation if not
@@ -127,7 +132,7 @@ int main(int argc, char** argv)
 		std::string baseName = argv[2];
 		double utilization = atof(argv[4]);
 
-		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(baseName, 4096);
+		IStorageManager* diskfile = StorageManager::createNewDiskStorageManager(baseName, 32768);  //32768
 			// Create a new storage manager with the provided base name and a 4K page size.
 
 		StorageManager::IBuffer* file = StorageManager::createNewRandomEvictionsBuffer(*diskfile, 10, false);
@@ -136,19 +141,31 @@ int main(int argc, char** argv)
 
 		MyDataStream stream(argv[1]);
 
+		struct timeval start_time, end_time;
+		double secs;
+		(void)gettimeofday(&start_time, NULL);
+
 		// Create and bulk load a new RTree with dimensionality 2, using "file" as
 		// the StorageManager and the RSTAR splitting policy.
 		id_type indexIdentifier;
 		ISpatialIndex* tree = RTree::createAndBulkLoadNewRTree(
 			RTree::BLM_STR, stream, *file, utilization, atoi(argv[3]), atoi(argv[3]), 2, SpatialIndex::RTree::RV_RSTAR, indexIdentifier);
 
-		std::cerr << *tree;
-		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
-		std::cerr << "Index ID: " << indexIdentifier << std::endl;
+		(void)gettimeofday(&end_time, NULL);
+		secs = (((double) end_time.tv_sec * 1000000 + end_time.tv_usec)
+				- ((double) start_time.tv_sec * 1000000 + start_time.tv_usec))
+				/ 1000000;
 
-		bool ret = tree->isIndexValid();
-		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
-		else std::cerr << "The stucture seems O.K." << std::endl;
+		printf(" BULK-Load datafile in STR-tree in %.2f seconds: ", secs);
+//		printf("%.0f records/second\n", 10 000 000 / secs);
+
+//		std::cerr << *tree;
+//		std::cerr << "Buffer hits: " << file->getHits() << std::endl;
+//		std::cerr << "Index ID: " << indexIdentifier << std::endl;
+//
+//		bool ret = tree->isIndexValid();
+//		if (ret == false) std::cerr << "ERROR: Structure is invalid!" << std::endl;
+//		else std::cerr << "The stucture seems O.K.K" << std::endl;
 
 		delete tree;
 		delete file;
