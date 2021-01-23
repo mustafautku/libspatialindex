@@ -13,8 +13,8 @@
 #gnuplot> plot "pltWLchangeOn-Dyn-STR" using 3:4 w lp title "R*tree", "pltWLchangeOn-Dyn-STR" using 3:5 w lp title "STR-tree"
 
 #qx     qy    	r   	R*tree-disk-IO     STR-tree-disk-io			Adaptif STR-disk-io
-0.001	0.1		0.01		639					566
-0.005	0.02	0.25		367					304
-0.01	0.01	1			349					283
-0.02	0.005	4			379					331
-0.1		0.001	100			677					565
+0.001	0.1		0.01		639					566							278
+0.005	0.02	0.25		367					304							293
+0.01	0.01	1			349					283							283
+0.02	0.005	4			379					331							302
+0.1		0.001	100			677					565							271
