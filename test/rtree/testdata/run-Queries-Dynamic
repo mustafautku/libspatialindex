@@ -5,7 +5,7 @@
 export capacity=92
 export fillfactor=0.999
 
-export treename="tree${ds}_${dx}_${dy}_${d_dist}_${capacity}"
+export treename="tree${ds}_${data_loc_dist}_${dx}_${dy}_${d_dist}_${capacity}"
 export Dtreename="D_${treename}"
 
 echo Querying with R*-Tree $treename  with $queryfile
@@ -20,12 +20,12 @@ awk '{if ($1 ~ /Time/  ||
 		  ($1 ~ /Leaf/  && $2 !~ /pool/) || 
 		  $1 ~ /Query/ || 
 		  $1 ~ /Reads/ || 
-		  $1 ~ /RtreeName/) print $0}' < r > qDynStatsFile_${qx}_${qy}
+		  $1 ~ /RtreeName/) print $0}' < r > qDynStatsFile_${query_loc_dist}_${qx}_${qy}
 		  
 rm -rf r
 
 mkdir -p ${ds}
-mv  qDynStatsFile_${qx}_${qy} ./${ds}
+mv  qDynStatsFile_${query_loc_dist}_${qx}_${qy} ./${ds}
 
 mkdir -p results
 mv resultsDyn ./results

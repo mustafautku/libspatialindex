@@ -4,16 +4,16 @@
 # utku: Query Modes:  [intersection | 10NN | selfjoin | contains]
 
 #export ds=20000
-#export sl=0
+#export data_loc_dist=u
 #export dx=0.01
 #export dy=0.01
 #export d_dist=f
-#export datafile="data${ds}_${dx}_${dy}_${d_dist}"
+#export datafile="data${ds}_${data_loc_dist}_${dx}_${dy}_${d_dist}"
 
 export capacity=92
 export fillfactor=0.999
 
-export treename="tree${ds}_${dx}_${dy}_${d_dist}_${capacity}"
+export treename="tree${ds}_${data_loc_dist}_${dx}_${dy}_${d_dist}_${capacity}"
 export Dtreename="D_${treename}"
 
 echo Load R*-Tree $treename

@@ -1,11 +1,14 @@
 #! /bin/bash
 
+# NOTE:(UK) This file generates data set and load it into R*tree and STR-tree. 
+# In case you wish to generate only data set and display it with gnuplot, then comment loading commands at the last 2 line.
+
 export ds=50000
-export sl=0
+export data_loc_dist=g  # data location distribution: unifrom of gaussian, u or g
 
 export dx=0.01
 export dy=0.01
-export d_dist=f
+export d_dist=u    # EXTENT distribution: f or u: fixed size or uniformly distr.
 export qar=1       # Query Aspect Ratio
 export pS=10000  # Page size (RPB). Used in ext-sort
 export bP=100    # buffer size (num of buffers). Used in ext-sort

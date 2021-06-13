@@ -1,19 +1,19 @@
 #! /bin/bash
 
-echo Generating dataset  #"Usage: ds sl qs d_dx d_dy d_dist q_dx q_dy q_dist" 
+# NOTE(utku): You can not run this file standalone. This file is called from "run-GenerateQueriesAndExecOnDyn-STR" in which "ds data_loc_dist qs ..." are set (i.e. exported). 
 
+echo Generating dataset  #"Usage: ds data_loc_dist qs query_loc_dist d_dx d_dy d_dist q_dx q_dy q_dist" 
 
-
-export dpostfix="${ds}_${dx}_${dy}_${d_dist}"
-export qpostfix="${qs}_${qx}_${qy}_${q_dist}"
+export dpostfix="${ds}_${data_loc_dist}_${dx}_${dy}_${d_dist}"
+export qpostfix="${qs}_${query_loc_dist}_${qx}_${qy}_${q_dist}"
 
 
 export datafile="data${dpostfix}"
 export queryfile="query${qpostfix}"
 
-#time ../../test-rtree-Generator $ds $sl $qs $dx $dy $d_dist $qx $qy $q_dist > d
+#time ../../test-rtree-Generator $ds $data_loc_dist $qs $query_loc_dist $dx $dy $d_dist $qx $qy $q_dist > d
 
-time ../../test-rtree-Generator 1 0 $qs 0.1 0.1 f $qx $qy $q_dist > d   # 1 0 0.1 0.1 f is dummy
+time ../../test-rtree-Generator 1 u $qs $query_loc_dist 0.1 0.1 f $qx $qy $q_dist > d   # 1 u .. 0.1 0.1 f is dummy
 
 
 
@@ -29,5 +29,5 @@ END{}' $queryfile > "pltquery"
 mkdir -p plt   # -p flag: mk dir only if dir does not exist.
 mv "pltquery" ./plt
 
-# you may plot data and query with the following command:
+# you may plot data and query with the following command: (Of course never uncomment the following)
 # gnuplot> plot "pltdata" using 1:2 w l, "pltquery" using 1:2 with lines lw 4

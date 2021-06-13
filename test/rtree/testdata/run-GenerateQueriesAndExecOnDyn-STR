@@ -1,19 +1,23 @@
 #! /bin/bash
 
+# NOTE(UK): This file is to run a set of queries on R*tree and STR-tree AFTER generating a query Workload.
+# In case you wish to generate only Query set and display it with gnuplot, then comment loading commands at the last 2 line.
+
 # ---> SET QUERY SET characteristics:
-export qs=100
-export qx=0.01
-export qy=0.01
-export q_dist=f
+export qs=1000
+export query_loc_dist=g
+export qx=0.1
+export qy=0.1
+export q_dist=u
 
 # CHANGE THE FOLLWING ONLY IF NEW INDEX İS LOADED..
 # DO NOT TOUCH FOLLOWING !!! use the following already exist "data" characteristics:  (Indexes should have been loadded before.)
 
 export ds=50000
-export sl=0
+export data_loc_dist=g
 export dx=0.01
 export dy=0.01
-export d_dist=f
+export d_dist=u
 
 . ./run-GenerateQueries    # sometime, . at the beginning makes all exports global in the current shell.
 ./run-Queries-Dynamic

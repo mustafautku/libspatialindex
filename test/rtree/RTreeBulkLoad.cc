@@ -152,7 +152,7 @@ public:
 
 int main(int argc, char** argv) {
 	try {
-		if (argc != 5 && argc != 6 && argc != 8) {
+		if (! (argc == 5  || argc == 8) ) { // either 5 or 8 argument. Others are incorrect.
 			std::cerr << "Usage       : " << argv[0]
 					<< " input_file tree_file capacity utilization r PS BP "  // pS: PageSize(#ofRecords/Block)   bP: Total # of Buffers
 					<< std::endl;
@@ -213,12 +213,12 @@ int main(int argc, char** argv) {
 		var.m_val.lVal = SpatialIndex::RTree::RV_RSTAR ;
 		ps.setProperty("TreeVariant", var);
 
-		if (argc == 6) {
+
+		if (argc == 8) {
 			var.m_varType = Tools::VT_DOUBLE;
 			var.m_val.dblVal = atof(argv[5]);   // r=qx/qy;
 			ps.setProperty("QueryAspectRatio", var);
-		}
-		if (argc == 8) {
+
 			var.m_varType = Tools::VT_ULONG;
 			var.m_val.ulVal = atol(argv[6]);  //pS
 			ps.setProperty("ExternalSortBufferPageSize", var);
@@ -227,6 +227,10 @@ int main(int argc, char** argv) {
 			var.m_val.ulVal = atol(argv[7]);  // bP
 			ps.setProperty("ExternalSortBufferTotalPages", var);
 		} else { // use default values
+			var.m_varType = Tools::VT_DOUBLE;
+			var.m_val.dblVal = 1.0;   // r=qx/qy;
+			ps.setProperty("QueryAspectRatio", var);
+
 			var.m_varType = Tools::VT_ULONG;
 			var.m_val.ulVal = 10000;  //pS
 			ps.setProperty("ExternalSortBufferPageSize", var);
