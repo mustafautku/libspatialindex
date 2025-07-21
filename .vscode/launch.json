@@ -1,0 +1,78 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug test-rtree-Generator",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-Generator",
+      "args": ["100", "0"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug test-rtree-RTreeLoad",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-RTreeLoad",
+      "args": ["data", "tree","92","intersection"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug test-rtree-RTreeLoad (with auto build)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-RTreeLoad",
+      "args": ["data", "tree", "100", "intersection"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+        }
+      ],
+      "preLaunchTask": "_build: build-and-install-libspatialindex",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}

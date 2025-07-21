@@ -1,0 +1,209 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "_build: CMake config & Build & Install libspatialindex LIBRARY",
+			"type": "shell",
+			"command": "${workspaceFolder}/.vscode/Build_library.sh",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		// {
+		// 	"label": "_build: Build libspatialindex tests",
+		// 	"type": "shell",
+		// 	"command": "${workspaceFolder}/.vscode/Build_tests.sh",
+		// 	"group": {
+		// 		"kind": "build",
+		// 		"isDefault": false
+		// 	},
+		// 	"problemMatcher": []
+		// },
+		{
+			"label": "_build: Build Active TEST File with CMake Target",
+			"type": "shell",
+			"command": "${workspaceFolder}/.vscode/Build_active.sh",
+			"args": [
+				"${relativeFile}"
+			],
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared"
+			},
+			"detail": "Builds only the active source TEST file's target using Build_active.sh"
+		},
+		{
+			"label": "_clean: Clean libspatialindex",
+			"type": "shell",
+			"command": "${workspaceFolder}/.vscode/clean.sh",
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "_build: build-and-install-libspatialindex",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build", "mybuild",
+				"--target", "install",
+				"-j", "8"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "test-rtree-Generator",
+			"type": "shell",
+			"command": "${workspaceFolder}/mybuild/test/test-rtree-Generator",
+			"args": ["100","0"],
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test",
+				"env": {
+				"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "test-rtree-RTreeLoad",
+			"type": "shell",
+			"command": "${workspaceFolder}/mybuild/test/test-rtree-RTreeLoad",
+			"args": ["data","tree","100","intersection"],
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test",
+				"env": {
+				"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "rtree/test1",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/rtree/test1/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "rtree/test2",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/rtree/test2/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "rtree/test3",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/rtree/test3/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "rtree/test4",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/rtree/test4/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "geometry/test1",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/geometry/test1/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "index-tests",
+			"type": "shell",
+			"command": "${workspaceFolder}/test/index-tests.sh",
+			"options": {
+				"cwd": "${workspaceFolder}/test/", // generates many files in the test directory but will be completely cleaned up by the cleanup-test-output.sh script.
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+				 	"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		}
+	]
+}

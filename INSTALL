@@ -79,3 +79,87 @@ installation prefix other than `/usr/local' by giving `cmake' the
 option `-B PREFIX'.  Here is an example:
 
       cmake . -B /home/user1/my-build/
+
+
+
+************* I have Build_library.sh, Build_tests.sh and Build_active.sh scripts to automate the build process. *************
+
+Build_library.sh  :::  you have task labeled as "_build: CMake config & Build & Install libspatialindex LIBRARY" in .vscode/tasks.json.
+------------------
+~/projeler/libspatialindex$ cmake . -Bmybuild -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex -DCMAKE_BUILD_TYPE=Debug
+
+   cmake — Invokes the CMake configuration tool.
+   . — Specifies the current directory as the source directory (where the CMakeLists.txt file is).
+   -Bmybuild — Tells CMake to generate all build files (like Makefile, CMakeCache.txt, etc.) in a new directory called mybuild.
+   -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex — Sets the custom installation path to your PROGRAMMING directory under your home folder.
+
+~/projeler/libspatialindex$ cmake --build mybuild -j$(nproc)         # Compiles the project
+~/projeler/libspatialindex$ cmake --install mybuild                  # Installs it to $HOME/PROGRAMMING/libspatialindex
+
+
+build_tests.sh ::::   you have task labeled as "_build: Build libspatialindex tests" in .vscode/tasks.json.
+--------------------
+# If you want to build the library's executables in a different directory, you can do it like in build_tests.s
+# FAKAT BUNA GEREK YOK. Cunku root dizindeki CMakeLists.txt icinde 
+#if(BUILD_TESTING)
+#   add_subdirectory(test)
+# endif()
+# olduğu için root/mybuild/test altında executable dosyaları olusuyor.
+Bu asagidaki de calistirsan bu sefer root/test/mybuild altında da executable dosyaları olusacak..GEREK YOK.
+~/projeler/libspatialindex/test$ mkdir mybuild && cd mybuild
+mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ ls
+mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ cmake .. \
+   -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_PREFIX_PATH=$HOME/PROGRAMMING/libspatialindex \
+  -DCMAKE_INSTALL_RPATH=$HOME/PROGRAMMING/libspatialindex/lib \
+  -DCMAKE_EXE_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib"
+mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ make -j$(nproc)
+
+
+Build_active.sh :::    you have task labeled as "_build: Build Active TEST File with CMake Target" in .vscode/tasks.json.
+-------------------------
+Eğer test dizinindeki tek bir testi hizlica derlemek istersen: mybuild dizininde şunu yapabilirsin:
+cmake --build . --target my_test_binary_name
+
+
+*************************************************
+-- modify a single test  --> run task labeled "_build: Build Active TEST File with CMake Target"
+
+modify library's src  --> run task labeled as "_build: build-and-install-libspatialindex"
+   includes "make" and "make install". no need to cmake config..
+
+if you delete mybuild directory, you can run the task labeled as "_build: CMake config & Build & Install libspatialindex LIBRARY" in .vscode/tasks.json to regenerate it.
+
+task.json'da "kind": "build" olan ve Build_library.sh ile library build edilirken aşağıdaki set önemli, ta ki system-wide kurulmasın..Cunku system-wide kullananlar python-rtree, QGIS..
+cmake . -Bmybuild -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex
+
+task.json'da "kind": "test" olan yani execution teslerde aşağıdaki set önemli..ta ki system-wide libspatialindex lib dosyalari kullanilmasin..
+"LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+
+************************************************,
+F5 -->
+   bu komut launch.json ile ilgili..run veya debug yapmak icin..
+   Visual Studio Code'da sol üstteki debug configuration dropdown menüsü, .vscode/launch.json dosyasindaki 
+   tanimli tüm debug yapilandirmalarini listeler.
+   🔁 O listede:
+   "name": "..." alanina yazdigim her şey orada görünür.
+   listeden hangisini seçiliyse F5 tuşuna basildiğinda  veya "Run > Start Debugging" dediğinizde, sadece onu çalıştirir.
+
+Ctl- Shift + B   --> sadece build icin..
+   bu komut task.json ile ilgili..
+   "group": {
+				"kind": "build",
+				"isDefault": true
+			}
+   bu gruptaki tüm isDefault olan task'ları top-drop down listede listeler..Su anda 2 tane var:
+      _build: build-and-install-libspatialindex   --> library src değiştirdiysen
+      _build: Build Active TEST File with CMake Target  --> test src değiştirdiysen
+
+Her test (Exhaustive, Generator, RTreeeLoad, RtreeBulkLoad, RTreeQuery) farkli argumanlar ile çaliştiği için 
+farkli task veya launch tanimi yapmam gerekiyor..
+
+Ctl + Shift + P  -->
+   bu komut da top-command palette ile ilgili..
+   "Run Task" yazinca, task.json'daki tüm task'lari listeler.
+   oradan istediğini seçip çaliştirabilirsin.
