@@ -9,12 +9,12 @@
       "args": ["100", "0"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/mybuild/test",
-      "environment": [
-        {
-          "name": "LD_LIBRARY_PATH",
-          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
-        }
-      ],
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
       "externalConsole": false,
       "MIMode": "gdb",
       "setupCommands": [
@@ -33,12 +33,60 @@
       "args": ["data", "tree","92","intersection"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/mybuild/test",
-      "environment": [
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
         {
-          "name": "LD_LIBRARY_PATH",
-          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
         }
-      ],
+      ]
+    },
+    {
+      "name": "Debug test-rtree-RTreeBulkLoad",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-RTreeBulkLoad",
+      "args": ["data", "tree","92","0.99"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug test-rtree-RTreeQuery",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-RTreeQuery",
+      "args": ["queries", "tree","intersection"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
       "externalConsole": false,
       "MIMode": "gdb",
       "setupCommands": [
@@ -57,15 +105,35 @@
       "args": ["data", "tree", "100", "intersection"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/mybuild/test",
-      "environment": [
-        {
-          "name": "LD_LIBRARY_PATH",
-          "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
-        }
-      ],
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
       "preLaunchTask": "_build: build-and-install-libspatialindex",
       "externalConsole": false,
       "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug libsidxtest",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/bin/libsidxtest",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/mybuild/test",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",  // veya gdb'nin doğru path'i
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

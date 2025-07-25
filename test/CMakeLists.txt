@@ -71,5 +71,11 @@ if (UNIX)
              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     set_property(TEST index-tests PROPERTY ENVIRONMENT
              "PATH=${CMAKE_BINARY_DIR}/test/:$ENV{PATH}")
+
+    add_test(NAME mytest1
+             COMMAND /bin/sh "${CMAKE_CURRENT_SOURCE_DIR}/rtree/test0/run"
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test)
+    set_property(TEST mytest1 PROPERTY ENVIRONMENT
+             "PATH=${CMAKE_BINARY_DIR}/test/:$ENV{PATH}")
 endif (UNIX)
 add_subdirectory(gtest)

@@ -80,47 +80,94 @@ option `-B PREFIX'.  Here is an example:
 
       cmake . -B /home/user1/my-build/
 
-
-
+****************************************************************
+I have 2 libspatialindex library, one is in system-level the other is in private.
+   1- ) dpkg -l | grep spatialindex
+         ii  libspatialindex-c6:amd64           1.9.3-2                                 amd64        General framework for developing spatial indices - C library
+   2- ) see the version in root/CMakeLists.txt:
+         project(spatialindex
+            LANGUAGES CXX
+            VERSION "2.1.0"
+            HOMEPAGE_URL "https://github.com/libspatialindex/libspatialindex"
+      )
 ************* I have Build_library.sh, Build_tests.sh and Build_active.sh scripts to automate the build process. *************
 
 Build_library.sh  :::  you have task labeled as "_build: CMake config & Build & Install libspatialindex LIBRARY" in .vscode/tasks.json.
 ------------------
-~/projeler/libspatialindex$ cmake . -Bmybuild -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex -DCMAKE_BUILD_TYPE=Debug
+1. yol( en basit): 
+   ~/projeler/libspatialindex$ cmake . -Bmybuild -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex -DCMAKE_BUILD_TYPE=Debug
+         cmake — Invokes the CMake configuration tool.
+         . — Specifies the current directory as the source directory (where the CMakeLists.txt file is).
+         -Bmybuild — Tells CMake to generate all build files (like Makefile, CMakeCache.txt, etc.) in a new directory called mybuild.
+               --> This makes ${CMAKE_BINARY_DIR} as mybuild.
+         -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex — Sets the custom installation path to your PROGRAMMING directory under your home folder.
 
-   cmake — Invokes the CMake configuration tool.
-   . — Specifies the current directory as the source directory (where the CMakeLists.txt file is).
-   -Bmybuild — Tells CMake to generate all build files (like Makefile, CMakeCache.txt, etc.) in a new directory called mybuild.
-   -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex — Sets the custom installation path to your PROGRAMMING directory under your home folder.
+2.yol: Fakat bu yukardaki 1. yoldaki cmake config yerine aşağıdaki test ortamı için daha iyi:
+   ~/projeler/libspatialindex$cmake -S . -B mybuild \
+      -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+      -DCMAKE_INSTALL_RPATH=$HOME/PROGRAMMING/libspatialindex/lib \
+      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE
+      Dinamik linker (ld.so) .so dosyalarını sadece şu dizinde arayacak: /home/mustafautku/PROGRAMMING/libspatialindex/lib
+      Başka hiçbir yere (örneğin /usr/lib, /usr/local/lib, vs.) gitmeyecek.
+      LD_LIBRARY_PATH bile override edemez, çünkü RUNPATH buna izin vermez 
+               (sadece RPATH bunu engellerdi, ama sende USE_LINK_PATH=FALSE sayesinde fallback yok).
+      MEsela: 
+         PROGRAMMING/libspatialindex/lib silinirse → binary çalışmaz
 
-~/projeler/libspatialindex$ cmake --build mybuild -j$(nproc)         # Compiles the project
-~/projeler/libspatialindex$ cmake --install mybuild                  # Installs it to $HOME/PROGRAMMING/libspatialindex
+   ~/projeler/libspatialindex$ cmake --build mybuild -j$(nproc)         # Compiles the project
+   ~/projeler/libspatialindex$ cmake --install mybuild                  # Installs it to $HOME/PROGRAMMING/libspatialindex
+
+   libspatialindex$ readelf -d mybuild/test/test-rtree-Generator | grep -i path
+      0x000000000000001d (RUNPATH)            Library runpath: [/home/mustafautku/PROGRAMMING/libspatialindex/lib]
+      yani bakacagi dynamic library path binary icine gömülü ve başka yerde de aramayacak!!
+
+   Bu sayede (yani 2. yol ile) task veya launch config'lerde "LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib" ihtiyac kalmamis oldu..
+   FAKAT, bu sefer gtest calismiyor. mybuild/libsidxtest calisması için mybuild/lib altındaki libgtest.so.1.14.0 i bulması gerek.
+   Bunlari PROGRAMMING/libspatialindex e install etmedik, cunku bu harici bir sey..
+   O zaman bu mevcut (2.yol) cmake setting inde, gtest de calisması için 2 yol var:
+   1) libspatialindex/mybuild/bin$ LD_LIBRARY_PATH=../lib ./libsidxtest
+   2) bu mevcut (2.yol) cmake setting inde DCMAKE_INSTALL_RPATH i asagidaki gibi güncellemek..
+      -DCMAKE_INSTALL_RPATH="$HOME/PROGRAMMING/libspatialindex/lib;$HOME/projeler/libspatialindex/mybuild/lib"
+      bu durumda hem library nini kendi tesleri hem gtest calisacak..
+   O zaman son hali soyle:
+   cmake -S . -B mybuild \
+    -DCMAKE_INSTALL_PREFIX=$HOME/PROGRAMMING/libspatialindex \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+    -DCMAKE_INSTALL_RPATH="$HOME/PROGRAMMING/libspatialindex/lib;$HOME/projeler/libspatialindex/mybuild/lib" \
+    -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE
+   cmake --build mybuild -j$(nproc)         # Compiles the project
+   cmake --install mybuild                  # Installs it to $HOME/PROGRAMMING/libspatialindex
+
+
 
 
 build_tests.sh ::::   you have task labeled as "_build: Build libspatialindex tests" in .vscode/tasks.json.
 --------------------
-# If you want to build the library's executables in a different directory, you can do it like in build_tests.s
-# FAKAT BUNA GEREK YOK. Cunku root dizindeki CMakeLists.txt icinde 
-#if(BUILD_TESTING)
-#   add_subdirectory(test)
-# endif()
-# olduğu için root/mybuild/test altında executable dosyaları olusuyor.
-Bu asagidaki de calistirsan bu sefer root/test/mybuild altında da executable dosyaları olusacak..GEREK YOK.
-~/projeler/libspatialindex/test$ mkdir mybuild && cd mybuild
-mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ ls
-mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ cmake .. \
-   -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_PREFIX_PATH=$HOME/PROGRAMMING/libspatialindex \
-  -DCMAKE_INSTALL_RPATH=$HOME/PROGRAMMING/libspatialindex/lib \
-  -DCMAKE_EXE_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib" \
-  -DCMAKE_SHARED_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib"
-mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ make -j$(nproc)
+   # If you want to build the library's executables in a different directory, you can do it like in build_tests.s
+   # FAKAT BUNA GEREK YOK. Cunku root dizindeki CMakeLists.txt icinde 
+   #if(BUILD_TESTING)
+   #   add_subdirectory(test)
+   # endif()
+   # olduğu için root/mybuild/test altında executable dosyaları olusuyor.
+   Bu asagidaki de calistirsan bu sefer root/test/mybuild altında da executable dosyaları olusacak..GEREK YOK.
+   ~/projeler/libspatialindex/test$ mkdir mybuild && cd mybuild
+   mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ ls
+   mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ cmake .. \
+      -DCMAKE_BUILD_TYPE=Debug \
+   -DCMAKE_PREFIX_PATH=$HOME/PROGRAMMING/libspatialindex \
+   -DCMAKE_INSTALL_RPATH=$HOME/PROGRAMMING/libspatialindex/lib \
+   -DCMAKE_EXE_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib" \
+   -DCMAKE_SHARED_LINKER_FLAGS="-L$HOME/PROGRAMMING/libspatialindex/lib -Wl,-rpath=$HOME/PROGRAMMING/libspatialindex/lib"
+   mustafautku@DESKTOP-8QI17KG:~/projeler/libspatialindex/test/mybuild$ make -j$(nproc)
 
 
 Build_active.sh :::    you have task labeled as "_build: Build Active TEST File with CMake Target" in .vscode/tasks.json.
 -------------------------
-Eğer test dizinindeki tek bir testi hizlica derlemek istersen: mybuild dizininde şunu yapabilirsin:
-cmake --build . --target my_test_binary_name
+   Eğer test dizinindeki tek bir testi hizlica derlemek istersen: mybuild dizininde şunu yapabilirsin:
+   cmake --build . --target my_test_binary_name
 
 
 *************************************************
@@ -163,3 +210,25 @@ Ctl + Shift + P  -->
    bu komut da top-command palette ile ilgili..
    "Run Task" yazinca, task.json'daki tüm task'lari listeler.
    oradan istediğini seçip çaliştirabilirsin.
+
+
+
+********************************************
+CTest:
+   test/CMakeLists.txt deki add_test(...), yeni bir "ctest" testi ekliyor. Bu sayede mybuild ve mybuild/test
+   dizinlerinde CTestTestfile.cmake dosyaları olustu. 
+   mybuild/ veya mybuild/test altında asağidaki komutlar ile ctest yapilmis oluyor.
+   mybuild$ ctest -V  --> butun testleri calistiriyor. detayli döküm..verbose..
+   mybuild$ ctest index-tests   --> sadece index-tests isimli tanımlanan testi calistirir. verbose değil..
+   libspatialindex/mybuild$ ctest -V -R mytest1   --> sadece mytest1 verbose calistir..mytest1 test/CMakeLists.txt de tanımlandı..
+
+   Bu asagidaki mytest1 i test/CMakeLists.txt ye ben ekledim..
+   add_test(NAME mytest1
+             COMMAND /bin/sh "${CMAKE_CURRENT_SOURCE_DIR}/rtree/test0/run"
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test)     ---> mybuild/test altında dat idx ve diger temp file olusacak..
+    set_property(TEST mytest1 PROPERTY ENVIRONMENT
+             "PATH=${CMAKE_BINARY_DIR}/test/:$ENV{PATH}")     ---> mybuild/test altındaki executable lari kullanıyor..belki install etmediysek gene calissin..
+
+gtest:
+   The following runs the gtest. for debugging there is a correspoanding config "name": "Debug libsidxtest" in the launch.json
+   /libspatialindex/mybuild/bin$ ./libsidxtest 

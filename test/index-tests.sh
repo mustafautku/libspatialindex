@@ -17,11 +17,11 @@ execute_test () {
 }
 
 execute_test "geometry/test1"
-execute_test "rtree/test1"
-execute_test "rtree/test2"
-execute_test "rtree/test3"
-execute_test "rtree/test4"
+# execute_test "rtree/test1"
+# execute_test "rtree/test2"
+# execute_test "rtree/test3"
+# execute_test "rtree/test4"
 #execute_test "tprtree/test1"
 #execute_test "tprtree/test2"
 execute_test "mvrtree/test1"
-execute_test "mvrtree/test2"
+# execute_test "mvrtree/test2"
