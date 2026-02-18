@@ -38,6 +38,10 @@
 #if (defined _WIN32 || defined _WIN64 || defined WIN32 || defined WIN64)
 #include <direct.h>
 #define mkdir _mkdir
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
 #endif
 
 #if HAVE_PTHREAD_H
@@ -811,6 +815,7 @@ uint16_t Tools::BufferedFileReader::readUInt16()
 uint32_t Tools::BufferedFileReader::readUInt32()
 {
 	if (m_bEOF) throw Tools::EndOfStreamException("");
+	// if (m_bEOF) return std::numeric_limits<uint32_t>::max();
 
 	uint32_t ret;
 	m_file.read(reinterpret_cast<char*>(&ret), sizeof(uint32_t));
@@ -835,6 +840,22 @@ uint64_t Tools::BufferedFileReader::readUInt64()
 	}
 	return ret;
 }
+
+// uint64_t Tools::BufferedFileReader::readUInt64()
+// {
+// 	// if (m_bEOF) throw Tools::EndOfStreamException("");
+// 	if (m_bEOF) 
+// 		return std::numeric_limits<uint64_t>::max();
+
+// 	uint64_t ret;
+// 	m_file.read(reinterpret_cast<char*>(&ret), sizeof(uint64_t));
+// 	if (! m_file.good())
+// 	{
+// 		m_bEOF = true;
+// 		return std::numeric_limits<uint64_t>::max();
+// 	}
+// 	return ret;
+// }
 
 float Tools::BufferedFileReader::readFloat()
 {
@@ -1052,58 +1073,81 @@ void Tools::BufferedFileWriter::write(uint32_t u32Len, uint8_t* pData)
 //
 // TemporaryFile
 //
-Tools::TemporaryFile::TemporaryFile()
+Tools::TemporaryFile::TemporaryFile(){
+	{
+
+	#ifdef _MSC_VER
+
+	#ifndef L_tmpnam_s
+	// MSVC 2003 doesn't have tmpnam_s, so we'll have to use the old functions
+
+	    char* tmpName = NULL;
+	    tmpName = tmpnam( NULL );
+
+	    if (tmpName == NULL)
+	        throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
+
+	#else
+		char tmpName[L_tmpnam_s];
+		errno_t err = tmpnam_s(tmpName, L_tmpnam_s);
+		if (err)
+			throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
+
+	#endif
+		if (tmpName[0] == '\\')
+			m_sFile = std::string(tmpName + 1);
+		else
+			m_sFile = std::string(tmpName);
+
+	#else
+	  // see https://github.com/boostorg/filesystem/blob/b4d606cdd08640c9bca68f7e97b52245aeef398d/src/operations.cpp#L2783
+	  const char* val = nullptr;
+
+	  (val = std::getenv("TMPDIR" )) ||
+	  (val = std::getenv("TMP"    )) ||
+	  (val = std::getenv("TEMP"   )) ||
+	  (val = std::getenv("TEMPDIR"));
+
+	#   ifdef __ANDROID__
+	  const char* default_tmp = "/data/local/tmp";
+	#   else
+	  const char* default_tmp = "/tmp/sail";
+	#   endif
+	  std::string tempDir ((val != nullptr) ? val : default_tmp);
+	  
+	  if (mkdir(tempDir.c_str(), 0755) != 0 && errno != EEXIST) {
+            throw std::ios_base::failure("Cannot create directory: " + tempDir);
+        }
+	  // now contruct the temporary filename
+	  std::string tempName = tempDir + "/spatialindex-XXXXXX";
+	  char* tmpName = strdup(tempName.c_str());
+	  if (!tmpName || mkstemp(tmpName) == -1)
+			throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
+	  m_sFile = tmpName;
+	  free(tmpName);
+	#endif
+
+	  m_pFile = new Tools::BufferedFileWriter(m_sFile);
+	  m_mode=Tools::CREATE;  //utku
+	}
+}
+Tools::TemporaryFile::TemporaryFile(std::string sFile)
 {
-
-#ifdef _MSC_VER
-
-#ifndef L_tmpnam_s
-// MSVC 2003 doesn't have tmpnam_s, so we'll have to use the old functions
-
-    char* tmpName = NULL;
-    tmpName = tmpnam( NULL );
-
-    if (tmpName == NULL)
-        throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
-
-#else
-	char tmpName[L_tmpnam_s];
-	errno_t err = tmpnam_s(tmpName, L_tmpnam_s);
-	if (err)
-		throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
-
-#endif
-	if (tmpName[0] == '\\')
-		m_sFile = std::string(tmpName + 1);
-	else
-		m_sFile = std::string(tmpName);
-
-#else
-  // see https://github.com/boostorg/filesystem/blob/b4d606cdd08640c9bca68f7e97b52245aeef398d/src/operations.cpp#L2783
-  const char* val = nullptr;
-
-  (val = std::getenv("TMPDIR" )) ||
-  (val = std::getenv("TMP"    )) ||
-  (val = std::getenv("TEMP"   )) ||
-  (val = std::getenv("TEMPDIR"));
-
-#   ifdef __ANDROID__
-  const char* default_tmp = "/data/local/tmp";
-#   else
-  const char* default_tmp = "/tmp";
-#   endif
-  std::string tempDir ((val != nullptr) ? val : default_tmp);
-
-  // now construct the temporary filename
-  std::string tempName = tempDir + "/spatialindex-XXXXXX";
-  char* tmpName = strdup(tempName.c_str());
-  if (!tmpName || mkstemp(tmpName) == -1)
-		throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
-  m_sFile = tmpName;
-  free(tmpName);
-#endif
-
-	m_pFile = new Tools::BufferedFileWriter(m_sFile, Tools::CREATE);
+	m_sFile = sFile;
+	m_pFile = new Tools::BufferedFileWriter(m_sFile, Tools::APPEND);
+	m_mode=Tools::APPEND;
+}
+Tools::TemporaryFile::TemporaryFile(FileMode mode)
+{
+	  // now contruct the temporary filename
+	  std::string tempName = "/tmp/sail/spatialindex-XXXXXX";
+	  char* tmpName = strdup(tempName.c_str());
+	  if (!tmpName || mkstemp(tmpName) == -1)
+			throw std::ios_base::failure("Tools::TemporaryFile: Cannot create temporary file name.");
+	  m_sFile = tmpName;
+	  free(tmpName);
+	m_pFile = new Tools::BufferedFileWriter(m_sFile, mode);
+	m_mode=mode;
 }
 
 Tools::TemporaryFile::~TemporaryFile()
@@ -1113,9 +1157,20 @@ Tools::TemporaryFile::~TemporaryFile()
 #ifdef _MSC_VER
 	_unlink(m_sFile.c_str());
 #else
-	std::remove(m_sFile.c_str());
+	if(m_mode==Tools::CREATE)  std::remove(m_sFile.c_str());
 #endif
 }
+
+//Tools::TemporaryFile::~TemporaryFile()
+//{
+//	delete m_pFile;
+//
+//#ifdef _MSC_VER
+//	_unlink(m_sFile.c_str());
+//#else
+//	std::remove(m_sFile.c_str());
+//#endif
+//}
 
 void Tools::TemporaryFile::rewindForReading()
 {
@@ -1132,14 +1187,35 @@ void Tools::TemporaryFile::rewindForReading()
 void Tools::TemporaryFile::rewindForWriting()
 {
 	Tools::BufferedFileWriter* bw = dynamic_cast<Tools::BufferedFileWriter*>(m_pFile);
-	if (bw != nullptr)
-		m_pFile->rewind();
+	if ( bw != nullptr){
+		if(m_mode == Tools::CREATE) m_pFile->rewind();
+//		else m_pFile->seek(std::ios_base::end);  // append ise bir sey yapma..
+	}
 	else
 	{
-		delete m_pFile;
-		m_pFile = new Tools::BufferedFileWriter(m_sFile);
+		if(m_mode == Tools::APPEND)
+			m_pFile = new Tools::BufferedFileWriter(m_sFile,Tools::APPEND);
+		else{
+			delete m_pFile;
+			m_pFile = new Tools::BufferedFileWriter(m_sFile);
+		}
 	}
 }
+
+//void Tools::TemporaryFile::rewindForWriting()
+//{
+//	Tools::BufferedFileWriter* bw = dynamic_cast<Tools::BufferedFileWriter*>(m_pFile);
+//	if (bw != nullptr)
+//		m_pFile->rewind();
+//	else
+//	{
+//		delete m_pFile;
+//		m_pFile = new Tools::BufferedFileWriter(m_sFile);
+//	}
+//}
+
+
+
 
 bool Tools::TemporaryFile::eof()
 {

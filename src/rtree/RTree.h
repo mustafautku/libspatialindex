@@ -31,6 +31,9 @@
 #include "Node.h"
 #include "PointerPoolNode.h"
 #include <memory>
+#include <limits>
+
+#include "BulkLoader.h"  // utku. MyDataStream için ekledim..
 
 namespace SpatialIndex
 {
@@ -44,7 +47,7 @@ namespace SpatialIndex
 			RTree(IStorageManager&, Tools::PropertySet&);
 				// String                   Value     Description
 				// ----------------------------------------------
-				// IndexIndentifier         VT_LONG   If specified an existing index will be opened from the supplied
+				// IndexIndentifier         VT_LONG   If specified an existing index will be openened from the supplied
 				//                          storage manager with the given index id. Behaviour is unspecified
 				//                          if the index id or the storage manager are incorrect.
 				// Dimension                VT_ULONG  Dimensionality of the data that will be inserted.
@@ -120,7 +123,7 @@ namespace SpatialIndex
 				// for Points and Rectangles', Section 4.1]
 
 			double m_splitDistributionFactor;
-				// The R*-Tree 'm' constant, for calculating splitting distributions.
+				// The R*-Tree 'm' constant, for calculating spliting distributions.
 				// [Beckmann, Kriegel, Schneider, Seeger 'The R*-tree: An efficient and Robust Access Method
 				// for Points and Rectangles', Section 4.2]
 
@@ -137,10 +140,14 @@ namespace SpatialIndex
 
 			bool m_bTightMBRs;
 
+			bool m_initialLoading;
+
 			Tools::PointerPool<Point> m_pointPool;
 			Tools::PointerPool<Region> m_regionPool;
 			Tools::PointerPool<Node> m_indexPool;
 			Tools::PointerPool<Node> m_leafPool;
+			// utku
+//			Tools::PointerPool<Tools::TemporaryFile> m_TempFilePool;
 
 			std::vector<std::shared_ptr<ICommand> > m_writeNodeCommands;
 			std::vector<std::shared_ptr<ICommand> > m_readNodeCommands;
@@ -184,6 +191,118 @@ namespace SpatialIndex
 				Region m_parentMBR;
 				NodePtr m_pNode;
 			}; // ValidateEntry
+
+
+			// internal'da STR olusturmaya calisiyorum..Onun icin bu stream okyucuyu library'de bir yere dahil etmem gerekiyor.
+			//utku..buraya koyalım bakalım??  "RTree::"Data daki RTree yi çkardım..
+			class MyDataStream: public IDataStream {
+				public:
+					MyDataStream(Tools::TemporaryFile*& tf) :
+							m_tf(tf),m_pNext(nullptr) {
+						m_tf->rewindForReading();
+						insertcounter=0;
+						readNextEntry();
+					}
+					~MyDataStream() override
+					{
+						if (m_pNext != nullptr)
+							delete m_pNext;
+					}
+
+					IData* getNext() override
+					{
+						if (m_pNext == nullptr)
+							return nullptr;
+						insertcounter++;
+						Data* ret = m_pNext;
+						m_pNext = nullptr;
+						readNextEntry();
+						return ret;
+					}
+
+					bool hasNext() override
+					{
+						return (m_pNext != nullptr);
+					}
+
+					uint32_t size() override
+					{
+						throw Tools::NotSupportedException("Operation not supported.");
+					}
+
+					void rewind() override
+					{
+						if (m_pNext != nullptr) {
+							delete m_pNext;
+							m_pNext = nullptr;
+						}
+						m_tf->rewindForReading();
+						readNextEntry();
+					}
+					void readNextEntry() {
+						try{
+							ExternalSorter::Record rec;
+							rec.loadFromFile(*m_tf);
+							// if(rec.m_id == std::numeric_limits<id_type>::max()) return;  
+							m_pNext = new Data(0, 0, rec.m_r, rec.m_id);
+						}
+						catch (Tools::EndOfStreamException&)
+						{
+							return;
+						}
+					}
+					Tools::TemporaryFile* m_tf;
+					Data* m_pNext;
+					int insertcounter;
+			};
+
+			// use to access the leaf Node Ids, not leaf MBR. Thus we do not need to access leaf.!!
+			// kullanan yok..sadece duruyor...
+//			class MyQueryStrategy4: public SpatialIndex::IQueryStrategy {
+//			public:
+//				std::queue<id_type> ids;
+//				std::queue<id_type> leafNodes;
+////				RTree* m_disktree;
+//				uint32_t curr_level{100};
+//			public:
+////				MyQueryStrategy4 (ISpatialIndex* disktree):m_disktree(disktree){
+////				}
+//				MyQueryStrategy4 (){
+//				}
+//				~MyQueryStrategy4(){
+//				}
+//				void getNextEntry(const IEntry& entry, id_type& nextEntry, bool& hasNext) {
+////					IShape* ps;
+////					entry.getShape(&ps);
+////					Region* pr = dynamic_cast<Region*>(ps);
+//
+//					const INode* n = dynamic_cast<const INode*>(&entry);
+//					// traverse only index nodes at levels 1 and higher. level-by-level..
+//					if (n != 0 && n->getLevel() > 0) {
+//						if( n->getLevel() != curr_level){
+//							curr_level = n->getLevel();
+//						}
+//						for (uint32_t cChild = 0; cChild < n->getChildrenCount();
+//								cChild++) {
+//							if(n->getLevel()>1) ids.push(n->getChildIdentifier(cChild));
+//							else {
+//								leafNodes.push(n->getChildIdentifier(cChild));
+//							}
+//						}
+//					}
+//
+//					if (!ids.empty()) {
+//						nextEntry = ids.front();
+//						ids.pop();
+//						hasNext = true;
+//					}
+//					else hasNext = false;
+//
+//				}
+//			};
+
+			protected:
+				void generateOFNodes(std::shared_ptr<ExternalSorter>, NodePtr*& leafNodes, NodePtr);  // ditrubte OF
 
 			friend class Node;
 			friend class Leaf;

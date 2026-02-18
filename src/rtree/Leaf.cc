@@ -5,7 +5,7 @@
  * Copyright (c) 2002, Marios Hadjieleftheriou
  *
  * All rights reserved.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -44,6 +44,10 @@ Leaf::Leaf(SpatialIndex::RTree::RTree* pTree, id_type id): Node(pTree, id, 0, pT
 {
 }
 
+Leaf::Leaf(SpatialIndex::RTree::RTree* pTree, id_type id, uint32_t numChildren): Node(pTree, id, 0, numChildren)
+{
+}
+
 NodePtr Leaf::chooseSubtree(const Region&, uint32_t, std::stack<id_type>&)
 {
 	// should make sure to relinquish other PoolPointer lists that might be pointing to the
@@ -76,7 +80,9 @@ void Leaf::split(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, N
 			rtreeSplit(dataLength, pData, mbr, id, g1, g2);
 			break;
 		case RV_RSTAR:
-			rstarSplit(dataLength, pData, mbr, id, g1, g2);
+		case RV_INCREMENTAL:
+			if(id >= 0) rstarSplit(dataLength, pData, mbr, id, g1, g2);
+			else Tools::NotSupportedException("Leaf::split: Tree variant not supported."); //rstarSplitByQuery(dataLength, pData, mbr, id, g1, g2);  // query triggers split.
 			break;
 		default:
 			throw Tools::NotSupportedException("Leaf::split: Tree variant not supported.");
@@ -85,8 +91,45 @@ void Leaf::split(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, N
 	pLeft = m_pTree->m_leafPool.acquire();
 	pRight = m_pTree->m_leafPool.acquire();
 
-	if (pLeft.get() == nullptr) pLeft = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
-	if (pRight.get() == nullptr) pRight = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
+//	if (pLeft.get() == nullptr)
+//		pLeft = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
+//	else
+//		std::cerr << "used already exist" << std::endl;
+//	if (pRight.get() == nullptr)
+//		pRight = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
+//	else
+//			std::cerr << "used already exist" << std::endl;
+
+	if (pLeft.get() == nullptr){
+		if(g1.size() <= m_pTree->m_leafCapacity)
+			pLeft = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
+		else
+			pLeft = NodePtr(new Leaf(m_pTree, -1,g1.size()), &(m_pTree->m_leafPool));
+	}
+// 	else{
+// //		std::cerr << "used already exist mem: Needed:" << g1.size() << " , Acquired mem:"<< pLeft.get()->m_capacity << std::endl;
+// 		if (g1.size() > pLeft.get()->m_capacity) {
+// //			std::cerr << "         !!!!Refresh mem !!"<< std::endl;
+// 			m_pTree->m_leafPool.refresh(pLeft.get(), g1.size()+1);
+// 			//				n = NodePtr(new Leaf(this, -1,numChildren), &m_leafPool);
+// 			//n = m_leafPool.acquire(numChildren);  // Search in the pool for this specific size.  another try maybe later.
+// 		}
+// 	}
+	if (pRight.get() == nullptr){
+			if(g2.size() <= m_pTree->m_leafCapacity)
+				pRight = NodePtr(new Leaf(m_pTree, -1), &(m_pTree->m_leafPool));
+			else
+				pRight = NodePtr(new Leaf(m_pTree, -1,g2.size()), &(m_pTree->m_leafPool));
+	}
+// 	else{
+// //		std::cerr << "used already exist mem: Needed:" << g2.size() << " , Acquired mem:"<< pRight.get()->m_capacity << std::endl;
+// 		if (g2.size() > pRight.get()->m_capacity) {
+// //			std::cerr << "         !!!!Refresh mem !!"<< std::endl;
+// 			m_pTree->m_leafPool.refresh(pRight.get(), g2.size() + 1);
+// 			//				n = NodePtr(new Leaf(this, -1,numChildren), &m_leafPool);
+// 			//n = m_leafPool.acquire(numChildren);  // Search in the pool for this specific size.  another try maybe later.
+// 		}
+// 	}
 
 	pLeft->m_nodeMBR = m_pTree->m_infiniteRegion;
 	pRight->m_nodeMBR = m_pTree->m_infiniteRegion;
@@ -95,14 +138,20 @@ void Leaf::split(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, N
 
 	for (cIndex = 0; cIndex < g1.size(); ++cIndex)
 	{
-		pLeft->insertEntry(m_pDataLength[g1[cIndex]], m_pData[g1[cIndex]], *(m_ptrMBR[g1[cIndex]]), m_pIdentifier[g1[cIndex]]);
+		if( m_pIdentifier[g1[cIndex]] >= 0)
+			pLeft->insertEntry(m_pDataLength[g1[cIndex]], m_pData[g1[cIndex]], *(m_ptrMBR[g1[cIndex]]), m_pIdentifier[g1[cIndex]]);
+//		else
+//			std::cerr << "caugth query" << std::endl;
 		// we don't want to delete the data array from this node's destructor!
 		m_pData[g1[cIndex]] = nullptr;
 	}
 
 	for (cIndex = 0; cIndex < g2.size(); ++cIndex)
 	{
-		pRight->insertEntry(m_pDataLength[g2[cIndex]], m_pData[g2[cIndex]], *(m_ptrMBR[g2[cIndex]]), m_pIdentifier[g2[cIndex]]);
+		if( m_pIdentifier[g2[cIndex]] >= 0)
+			pRight->insertEntry(m_pDataLength[g2[cIndex]], m_pData[g2[cIndex]], *(m_ptrMBR[g2[cIndex]]), m_pIdentifier[g2[cIndex]]);
+//		else
+//					std::cerr << "caugth query" << std::endl;
 		// we don't want to delete the data array from this node's destructor!
 		m_pData[g2[cIndex]] = nullptr;
 	}
@@ -143,3 +192,4 @@ void Leaf::deleteData(const Region& mbr, id_type id, std::stack<id_type>& pathBu
 		if (n.get() == this) n.relinquish();
 	}
 }
+

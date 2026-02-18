@@ -38,6 +38,7 @@ namespace SpatialIndex
 
 		protected:
 			Leaf(RTree* pTree, id_type id);
+			Leaf(RTree* pTree, id_type id, uint32_t numChildren); // utku
 
 			NodePtr chooseSubtree(const Region& mbr, uint32_t level, std::stack<id_type>& pathBuffer) override;
 			NodePtr findLeaf(const Region& mbr, id_type id, std::stack<id_type>& pathBuffer) override;

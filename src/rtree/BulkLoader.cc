@@ -29,6 +29,10 @@
 #include <cstdio>
 #include <cmath>
 
+#include <limits>
+#include <cstdint>
+
+
 #ifndef _MSC_VER
 #include <unistd.h>
 #endif
@@ -88,6 +92,13 @@ void ExternalSorter::Record::storeToFile(Tools::TemporaryFile& f)
 
 void ExternalSorter::Record::loadFromFile(Tools::TemporaryFile& f)
 {
+	// uint64_t id= f.readUInt64();
+	// if (id == std::numeric_limits<uint64_t>::max())
+	// {
+	// 	m_id = std::numeric_limits<id_type>::max(); // or some other error handling
+	// 	return;
+	// }
+	// m_id = static_cast<id_type>(id);	
 	m_id = static_cast<id_type>(f.readUInt64());
 	uint32_t dim = f.readUInt32();
 	m_s = f.readUInt32();
@@ -206,6 +217,7 @@ void ExternalSorter::sort()
 					{
 						r = new Record();
 						r->loadFromFile(**it);
+						// if(r->m_id == std::numeric_limits<id_type>::max()) {delete r;break;} 
 						buffers.back().push(r);
 					}
 					catch (Tools::EndOfStreamException&)
@@ -232,6 +244,7 @@ void ExternalSorter::sort()
 						{
 							r = new Record();
 							r->loadFromFile(*buckets[e.m_u32Index]);
+							// if(r->m_id == std::numeric_limits<id_type>::max()) {delete r;break;} 
 							buffers[e.m_u32Index].push(r);
 						}
 						catch (Tools::EndOfStreamException&)
@@ -291,11 +304,14 @@ ExternalSorter::Record* ExternalSorter::getNextRecord()
 		}
 		else
 			throw Tools::EndOfStreamException("");
+			// return nullptr;
 	}
 	else
 	{
 		ret = new Record();
 		ret->loadFromFile(*m_sortedFile);
+		// if(ret->m_id == std::numeric_limits<id_type>::max())
+		// 	{delete ret;return nullptr;}
 	}
 
 	return ret;
@@ -315,7 +331,8 @@ void BulkLoader::bulkLoadUsingSTR(
 	uint32_t bindex,
 	uint32_t bleaf,
 	uint32_t pageSize,
-	uint32_t numberOfPages
+	uint32_t numberOfPages,
+	double r  // qx/qy
 ) {
 	if (! stream.hasNext())
 		throw Tools::IllegalArgumentException(
@@ -324,6 +341,10 @@ void BulkLoader::bulkLoadUsingSTR(
 
 	NodePtr n = pTree->readNode(pTree->m_rootID);
 	pTree->deleteNode(n.get());
+
+	#ifndef NDEBUG
+	std::cerr << "RTree::BulkLoader: Sorting data." << std::endl;
+	#endif
 
     std::shared_ptr<ExternalSorter> es = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, numberOfPages));
 
@@ -348,10 +369,14 @@ void BulkLoader::bulkLoadUsingSTR(
 
 	while (true)
 	{
+		#ifndef NDEBUG
+		std::cerr << "RTree::BulkLoader: Building level " << level << std::endl;
+		#endif
+
 		pTree->m_stats.m_nodesInLevel.push_back(0);
 
         std::shared_ptr<ExternalSorter> es2 = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, numberOfPages));
-		createLevel(pTree, es, 0, bleaf, bindex, level++, es2, pageSize, numberOfPages);
+		createLevel(pTree, es, 0, bleaf, bindex, level++, es2, pageSize, numberOfPages,r);
 		es = es2;
 
 		if (es->getTotalEntries() == 1) break;
@@ -371,20 +396,28 @@ void BulkLoader::createLevel(
 	uint32_t level,
 	std::shared_ptr<ExternalSorter> es2,
 	uint32_t pageSize,
-	uint32_t numberOfPages
+	uint32_t numberOfPages,
+	double r  // qx/qy
 ) {
 	uint64_t b = (level == 0) ? bleaf : bindex;
 	uint64_t P = static_cast<uint64_t>(std::ceil(static_cast<double>(es->getTotalEntries()) / static_cast<double>(b)));
 	uint64_t S = static_cast<uint64_t>(std::ceil(std::sqrt(static_cast<double>(P))));
+	S= static_cast<uint64_t>(std::ceil(static_cast<double>(S)*r));   // S*r;
 
-	if (S == 1 || dimension == pTree->m_dimension - 1 || S * b == es->getTotalEntries())
+	if (S == 1 || dimension == pTree->m_dimension - 1 || S * b == es->getTotalEntries())  // utku: 3rd condition is only for data sets with dim>2
 	{
 		std::vector<ExternalSorter::Record*> node;
 		ExternalSorter::Record* r;
 
 		while (true)
 		{
-			try { r = es->getNextRecord(); } catch (Tools::EndOfStreamException&) { break; }
+			try { r = es->getNextRecord(); } 
+			catch (Tools::EndOfStreamException&) { 
+				break; }
+			// r = es->getNextRecord();
+			// if (r == nullptr) 
+			// 	break;	
+
 			node.push_back(r);
 
 			if (node.size() == b)
@@ -421,11 +454,14 @@ void BulkLoader::createLevel(
 			{
 				try { pR = es->getNextRecord(); }
 				catch (Tools::EndOfStreamException&) { bMore = false; break; }
+				// pR = es->getNextRecord(); 
+				// if (pR == nullptr) { 
+				// 	bMore = false; break; }
 				pR->m_s = dimension + 1;
 				es3->insert(pR);
 			}
 			es3->sort();
-			createLevel(pTree, es3, dimension + 1, bleaf, bindex, level, es2, pageSize, numberOfPages);
+			createLevel(pTree, es3, dimension + 1, bleaf, bindex, level, es2, pageSize, numberOfPages,r);
 		}
 	}
 }

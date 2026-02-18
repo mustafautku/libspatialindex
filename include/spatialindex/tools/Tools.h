@@ -469,6 +469,9 @@ namespace Tools
 	{
 	public:
 		TemporaryFile();
+		// STR de bir hata ihtimali olabilir Ancak hata yok gibi..Daha detaylı bakmak gerekiyor..
+		TemporaryFile(FileMode mode );
+		TemporaryFile(std::string);
 		virtual ~TemporaryFile();
 
 		void rewindForReading();
@@ -497,5 +500,6 @@ namespace Tools
 	private:
 		std::string m_sFile;
 		BufferedFile* m_pFile;
+		FileMode m_mode;  // utku
 	};
 }

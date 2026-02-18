@@ -29,6 +29,9 @@
 #include <cmath>
 #include <limits>
 
+//#include <stdlib.h> // for system(...)
+
+
 #include <spatialindex/SpatialIndex.h>
 #include <spatialindex/capi/IdVisitor.h>
 #include "Node.h"
@@ -36,6 +39,9 @@
 #include "Index.h"
 #include "BulkLoader.h"
 #include "RTree.h"
+
+#include <chrono>
+using namespace std::chrono;
 
 using namespace SpatialIndex::RTree;
 using namespace SpatialIndex;
@@ -208,7 +214,7 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	switch (m)
 	{
 	case BLM_STR:
-	    bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, 10000, 100);
+		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, 1000, 100,1);  // default values:10000, 100,
 		break;
 	default:
 		throw Tools::IllegalArgumentException("createAndBulkLoadNewRTree: Unknown bulk load method.");
@@ -226,13 +232,15 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	id_type& indexIdentifier)
 {
 	Tools::Variant var;
-	RTreeVariant rv(RV_RSTAR);
-	double fillFactor(0.7);
-	uint32_t indexCapacity(100);
-	uint32_t leafCapacity(100);
-	uint32_t dimension(2);
-	uint32_t pageSize(10000);
-	uint32_t numberOfPages(100);
+	RTreeVariant rv(RV_LINEAR);
+	double fillFactor(0.0);
+	uint32_t indexCapacity(0);
+	uint32_t leafCapacity(0);
+	uint32_t dimension(0);
+	uint32_t pageSize(0);
+	uint32_t numberOfPages(0);
+
+	double r;
 
 	// tree variant
 	var = ps.getProperty("TreeVariant");
@@ -242,7 +250,8 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 			var.m_varType != Tools::VT_LONG ||
 			(var.m_val.lVal != RV_LINEAR &&
 			var.m_val.lVal != RV_QUADRATIC &&
-			var.m_val.lVal != RV_RSTAR))
+			var.m_val.lVal != RV_RSTAR &&
+			var.m_val.lVal != RV_INCREMENTAL))
 			throw Tools::IllegalArgumentException("createAndBulkLoadNewRTree: Property TreeVariant must be Tools::VT_LONG and of RTreeVariant type");
 
 		rv = static_cast<RTreeVariant>(var.m_val.lVal);
@@ -323,7 +332,20 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 		numberOfPages = var.m_val.ulVal;
 	}
 
+	var = ps.getProperty("QueryAspectRatio");
+	if (var.m_varType != Tools::VT_EMPTY) {
+		if (var.m_varType != Tools::VT_DOUBLE)
+			throw Tools::IllegalArgumentException(
+					"createAndBulkLoadNewRTree: Property QueryAspectRatio was not of type Tools::VT_DOUBLE");
+		r = var.m_val.dblVal;
+	}else
+		r=1;
+
 	SpatialIndex::ISpatialIndex* tree = createNewRTree(sm, fillFactor, indexCapacity, leafCapacity, dimension, rv, indexIdentifier);
+
+	assert(pageSize>10);
+	assert(numberOfPages>1);  // 10
+
 
 	uint32_t bindex = static_cast<uint32_t>(std::floor(static_cast<double>(indexCapacity * fillFactor)));
 	uint32_t bleaf = static_cast<uint32_t>(std::floor(static_cast<double>(leafCapacity * fillFactor)));
@@ -333,7 +355,7 @@ SpatialIndex::ISpatialIndex* SpatialIndex::RTree::createAndBulkLoadNewRTree(
 	switch (m)
 	{
 	case BLM_STR:
-		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, pageSize, numberOfPages);
+		bl.bulkLoadUsingSTR(static_cast<RTree*>(tree), stream, bindex, bleaf, pageSize, numberOfPages,r);
 		break;
 	default:
 		throw Tools::IllegalArgumentException("createAndBulkLoadNewRTree: Unknown bulk load method.");
@@ -372,6 +394,7 @@ SpatialIndex::RTree::RTree::RTree(IStorageManager& sm, Tools::PropertySet& ps) :
 	m_regionPool(1000),
 	m_indexPool(100),
 	m_leafPool(100)
+//	m_TempFilePool(100)
 {
 	Tools::Variant var = ps.getProperty("IndexIdentifier");
 	if (var.m_varType != Tools::VT_EMPTY)
@@ -381,14 +404,29 @@ SpatialIndex::RTree::RTree::RTree(IStorageManager& sm, Tools::PropertySet& ps) :
 			// for backward compatibility only.
 		else throw Tools::IllegalArgumentException("RTree: Property IndexIdentifier must be Tools::VT_LONGLONG");
 
+		//utku
+		m_initialLoading =false;
+//		var.m_varType = Tools::VT_BOOL;
+//		var.m_val.blVal = false;
+//		ps.setProperty("InitialLoading", var);
+
 		initOld(ps);
+
 	}
 	else
 	{
+		//utku
+		m_initialLoading = true;
+//		var.m_varType = Tools::VT_BOOL;
+//		var.m_val.blVal = true;
+//		ps.setProperty("InitialLoading", var);
+
 		initNew(ps);
 		var.m_varType = Tools::VT_LONGLONG;
 		var.m_val.llVal = m_headerID;
 		ps.setProperty("IndexIdentifier", var);
+
+
 	}
 }
 
@@ -741,6 +779,10 @@ void SpatialIndex::RTree::RTree::getIndexProperties(Tools::PropertySet& out) con
 	var.m_val.llVal = m_headerID;
 	out.setProperty("IndexIdentifier", var);
 
+//	var.m_varType = Tools::VT_BOOL;
+//	var.m_val.blVal = m_initialLoading;
+//	out.setProperty("InitialLoading", var);
+
 }
 
 void SpatialIndex::RTree::RTree::addCommand(ICommand* pCommand, CommandType ct)
@@ -873,7 +915,8 @@ void SpatialIndex::RTree::RTree::initNew(Tools::PropertySet& ps)
 			var.m_varType != Tools::VT_LONG ||
 			(var.m_val.lVal != RV_LINEAR &&
 			var.m_val.lVal != RV_QUADRATIC &&
-			var.m_val.lVal != RV_RSTAR))
+			var.m_val.lVal != RV_RSTAR&&
+			var.m_val.lVal != RV_INCREMENTAL))
 			throw Tools::IllegalArgumentException("initNew: Property TreeVariant must be Tools::VT_LONG and of RTreeVariant type");
 
 		m_treeVariant = static_cast<RTreeVariant>(var.m_val.lVal);
@@ -1050,7 +1093,8 @@ void SpatialIndex::RTree::RTree::initOld(Tools::PropertySet& ps)
 			var.m_varType != Tools::VT_LONG ||
 			(var.m_val.lVal != RV_LINEAR &&
 			 var.m_val.lVal != RV_QUADRATIC &&
-			 var.m_val.lVal != RV_RSTAR))
+			 var.m_val.lVal != RV_RSTAR &&
+			 var.m_val.lVal != RV_INCREMENTAL))
 			throw Tools::IllegalArgumentException("initOld: Property TreeVariant must be Tools::VT_LONG and of RTreeVariant type");
 
 		m_treeVariant = static_cast<RTreeVariant>(var.m_val.lVal);
@@ -1246,6 +1290,99 @@ void SpatialIndex::RTree::RTree::loadHeader()
 	delete[] header;
 }
 
+void SpatialIndex::RTree::RTree::generateOFNodes(std::shared_ptr<ExternalSorter> es, NodePtr*& newNodes, NodePtr curOFNode){
+	uint32_t bleaf = static_cast<uint32_t>(std::floor(static_cast<double>( m_leafCapacity* m_fillFactor)));
+	uint64_t P = static_cast<uint64_t>(std::ceil(static_cast<double>(es->getTotalEntries()) / static_cast<double>(bleaf)));
+	uint64_t S = static_cast<uint64_t>(std::ceil(std::sqrt(static_cast<double>(P))));
+	uint32_t pageSize=es->m_u32PageSize;
+	uint32_t bufferPages=es->m_u32BufferPages;
+
+	bool bMore = true;
+	int childno=0;
+	while (bMore)
+	{
+		ExternalSorter::Record* pR;
+		std::shared_ptr<ExternalSorter> es3 = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, bufferPages));
+		for (uint64_t i = 0; i < S * bleaf; ++i)
+		{
+			try { pR = es->getNextRecord(); }
+			catch (Tools::EndOfStreamException&) { bMore = false; break; }
+			// pR = es->getNextRecord();
+			// if (pR == nullptr) { bMore = false; break; }
+			
+			pR->m_s = 1;   // dim=1 e gore sıralama..
+			es3->insert(pR);
+		}
+		es3->sort();
+		std::vector<ExternalSorter::Record*> node;
+		ExternalSorter::Record* r;
+		while (true)
+		{
+			try { r = es3->getNextRecord(); } catch (Tools::EndOfStreamException&) { break; }
+			// r = es3->getNextRecord();
+			// if (r == nullptr) break;
+			
+			node.push_back(r);
+
+			if (node.size() == bleaf)
+			{
+				if(curOFNode->m_level ==0){
+					newNodes[childno]=m_leafPool.acquire();
+					if (newNodes[childno].get() == nullptr) newNodes[childno] = NodePtr(new Leaf(this, -1), &m_leafPool);
+				}
+				else{
+					newNodes[childno]=m_indexPool.acquire();
+					if (newNodes[childno].get() == nullptr) newNodes[childno] = NodePtr(new Index(this, -1, curOFNode->m_level), &(m_indexPool));
+				}
+				// gerek yok buna..
+				//Leaf* curLeaf = static_cast<Leaf*>(newleafs[childno].get());
+				//curLeaf->m_nodeMBR = m_infiniteRegion;
+				newNodes[childno]->m_nodeMBR= m_infiniteRegion;
+				for (size_t cChild = 0; cChild < node.size(); ++cChild)
+					{
+						newNodes[childno]->insertEntry(node[cChild]->m_len, node[cChild]->m_pData, node[cChild]->m_r, node[cChild]->m_id);
+						node[cChild]->m_pData = nullptr;
+						delete node[cChild];
+					}
+				node.clear();
+				if(curOFNode->m_identifier == -2) {
+					childno++; continue;
+				}
+				if(childno==0) newNodes[childno]->m_identifier=curOFNode->m_identifier;  //n->m_identifier=pL->m_identifier;
+				newNodes[childno]->m_level=curOFNode->m_level;
+				newNodes[childno]->m_OFchildren=0;
+				newNodes[childno]->m_OFfile="";
+				writeNode(newNodes[childno++].get());
+			}
+		}
+		if (! node.empty())
+		{
+			if(curOFNode->m_level ==0){
+				newNodes[childno]=m_leafPool.acquire();
+				if (newNodes[childno].get() == nullptr) newNodes[childno] = NodePtr(new Leaf(this, -1), &m_leafPool);
+			}
+			else{
+				newNodes[childno]=m_indexPool.acquire();
+				if (newNodes[childno].get() == nullptr) newNodes[childno] = NodePtr(new Index(this, -1, curOFNode->m_level), &(m_indexPool));
+			}
+			newNodes[childno]->m_nodeMBR= m_infiniteRegion;
+			for (size_t cChild = 0; cChild < node.size(); ++cChild)
+				{
+					newNodes[childno]->insertEntry(node[cChild]->m_len, node[cChild]->m_pData, node[cChild]->m_r, node[cChild]->m_id);
+					node[cChild]->m_pData = nullptr;
+					delete node[cChild];
+				}
+			node.clear();
+			if(curOFNode->m_identifier == -2) {
+				childno++; continue;
+			}
+			newNodes[childno]->m_level=curOFNode->m_level;
+			newNodes[childno]->m_OFchildren=0;
+			newNodes[childno]->m_OFfile="";
+			writeNode(newNodes[childno++].get());
+		}
+	}
+}
 void SpatialIndex::RTree::RTree::insertData_impl(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id)
 {
 	assert(mbr.getDimension() == m_dimension);
@@ -1257,19 +1394,175 @@ void SpatialIndex::RTree::RTree::insertData_impl(uint32_t dataLength, uint8_t* p
 	{
 		NodePtr root = readNode(m_rootID);
 
+		// overflowTable redistribute icin kullanılıyor. Asagida ilk olarak agac yuksekligi kadar ufak bir dinamik alan acip sifirladi.
+		// sonra kapasitesi dolan bir düğüme ekleme yapma sırasında split den once redistribute e ugrar. İste bu noktada ekleme yapılan dugum seviyesini 1 e set eder ki
+		// sadece 1 kez reditrbute denesin, olmadı split e sebep olsun !!!
 		overflowTable = new uint8_t[root->m_level];
 		memset(overflowTable, 0, root->m_level);
 
-		NodePtr l = root->chooseSubtree(mbr, 0, pathBuffer);
-		if (l.get() == root.get())
-		{
-			assert(root.unique());
-			root.relinquish();
+		if (id==-1 && !m_initialLoading && m_treeVariant == RV_INCREMENTAL && root->m_level > 0){
+			uint8_t* it=pData;
+			id_type firstchildId=0;
+			memcpy(&firstchildId, it, sizeof(id_type));
+			it += sizeof(id_type);
+			NodePtr l = root->findLeaf(mbr, firstchildId, pathBuffer);
+			if (l.get() == root.get())
+			{
+				assert(root.unique());
+				root.relinquish();
+			}
+
+			if (l.get() != nullptr)
+			{
+				Leaf* pL = static_cast<Leaf*>(l.get());
+
+				uint32_t totaldatasize=0;
+				memcpy(&totaldatasize, it, sizeof(uint32_t));
+				it += sizeof(uint32_t);
+				if(pL->m_OFfile == ""){
+					std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+					exit(-1);
+				}
+//				if(totaldatasize-pL->m_capacity!= pL->m_OFchildren){
+//					std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+//					exit(-1);
+//				}
+
+				Tools::TemporaryFile *tf= new Tools::TemporaryFile(pL->m_OFfile);
+				MyDataStream stream(tf);
+				// Bu asagidaki mumkun degil gibi..
+//				id_type indexIdentifier;
+////				ISpatialIndex* rtree= SpatialIndex::RTree::createAndBulkLoadNewRTree(SpatialIndex::RTree::BLM_STR, stream, *m_pStorageManager, 0.99,90,90,2,SpatialIndex::RTree::RV_INCREMENTAL, indexIdentifier);
+//				IStorageManager * mmstorage= StorageManager::createNewMemoryStorageManager();
+//				ISpatialIndex* mmrtree = SpatialIndex::RTree::createAndBulkLoadNewRTree(SpatialIndex::RTree::BLM_STR, stream, *mmstorage, 0.99,90,90,2,SpatialIndex::RTree::RV_INCREMENTAL, indexIdentifier);
+//  .....
+//				MyQueryStrategy4 qs;
+//				mmrtree->queryStrategy(qs);
+//				 while (!qs.leafids.empty()) {
+//						std::cout << qs.leafids.front() << " ";
+//						qs.leafids.pop();
+//					}
+
+				uint32_t pageSize=10000;
+				uint32_t bufferPages=100;
+				uint32_t bleaf = static_cast<uint32_t>(std::floor(static_cast<double>( m_leafCapacity* m_fillFactor)));
+
+				std::shared_ptr<ExternalSorter> es = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, bufferPages));
+				while (stream.hasNext())
+				{
+					Data* d = reinterpret_cast<Data*>(stream.getNext());
+					if (d == nullptr)
+						throw Tools::IllegalArgumentException(
+							"bulkLoadUsingSTR: RTree bulk load expects SpatialIndex::RTree::Data entries."
+						);
+
+					es->insert(new ExternalSorter::Record(d->m_region, d->m_id, d->m_dataLength, d->m_pData, 0));  // dim=0 e gore sıralama..
+					d->m_pData = nullptr;
+					delete d;
+				}
+				es->sort();
+
+				std::string filePath = tf->getFileName();
+				if (remove(filePath.c_str()) == 0) {
+//				        std::cout << "File removed successfully." << std::endl;
+				    } else {
+				        std::cout << "Serious OF error.!!!!!!" << std::endl;
+				        exit(-1);
+				    }
+				
+//				assert (es->getTotalEntries() == totaldatasize);
+				uint64_t P = static_cast<uint64_t>(std::ceil(static_cast<double>(es->getTotalEntries()) / static_cast<double>(bleaf)));
+
+				NodePtr* newleafs=new NodePtr[P];
+				m_stats.m_u64Splits += (P-1);
+
+				generateOFNodes(es,newleafs, l);
+
+				id_type cParent = pathBuffer.top(); pathBuffer.pop();
+				NodePtr ptrN = readNode(cParent);
+				Index* p = static_cast<Index*>(ptrN.get());
+				p->adjustTree(newleafs, P,pathBuffer, overflowTable);
+				delete[] newleafs;
+			}
 		}
-		l->insertData(dataLength, pData, mbr, id, pathBuffer, overflowTable);
+//		else if (id==-2 && !m_initialLoading && m_treeVariant == RV_INCREMENTAL && root->m_level > 0){  // obselete:  bulk insert u kokte toplama girisimi idi..hic girmiyor buraya..
+//
+//				std::string tfname(reinterpret_cast<const char*>(pData));//, dataLength); // uint32_t verisinin boyutunu çıkar
+//				uint32_t uintData;
+//				uint8_t* ptr=pData;
+//
+//				ptr += tfname.size()+1;
+//				std::memcpy(&uintData, ptr, sizeof(uint32_t));
+////
+////			    // uint32_t verisini okuma
+//
+//
+//		    Tools::TemporaryFile *bulktf= new Tools::TemporaryFile(tfname);
+//			NodePtr l = root->chooseSubtree(mbr, 0, pathBuffer);
+//			if (l.get() == root.get())
+//					{
+//						assert(root.unique());
+//						root.relinquish();
+//					}
+//			l->insertData(dataLength, pData, mbr, id, pathBuffer, overflowTable);
+
+//		    MyDataStream stream(bulktf);
+//		    uint32_t pageSize=10000;
+//			uint32_t bufferPages=100;
+//			uint32_t bleaf = static_cast<uint32_t>(std::floor(static_cast<double>( m_leafCapacity* m_fillFactor)));
+//
+//			std::shared_ptr<ExternalSorter> es = std::shared_ptr<ExternalSorter>(new ExternalSorter(pageSize, bufferPages));
+//			while (stream.hasNext())
+//			{
+//				Data* d = reinterpret_cast<Data*>(stream.getNext());
+//				if (d == nullptr)
+//					throw Tools::IllegalArgumentException(
+//						"bulkLoadUsingSTR: RTree bulk load expects SpatialIndex::RTree::Data entries."
+//					);
+//
+//				es->insert(new ExternalSorter::Record(d->m_region, d->m_id, d->m_dataLength, d->m_pData, 0));  // dim=0 e gore sıralama..
+//				d->m_pData = nullptr;
+//				delete d;
+//			}
+//			es->sort();
+//			uint64_t P = static_cast<uint64_t>(std::ceil(static_cast<double>(es->getTotalEntries()) / static_cast<double>(bleaf)));
+//			NodePtr* newleafs=new NodePtr[P];
+////			m_stats.m_u64Splits += (P-1); No this time we are not doing splits..
+//			NodePtr dummyNode=m_leafPool.acquire();
+//			if (dummyNode.get() == nullptr) dummyNode = NodePtr(new Leaf(this, -1), &m_leafPool);
+//			dummyNode->m_level=0;
+//			dummyNode->m_identifier=-2;  // distinguish bulk insert data
+//			generateOFNodes(es,newleafs, dummyNode);
+//			Node* n=newleafs[0].get();
+//
+//			NodePtr l = root->chooseSubtree(n->m_nodeMBR, 0, pathBuffer);
+//			if (l.get() == root.get())
+//					{
+//						assert(root.unique());
+//						root.relinquish();
+//					}
+//			unsigned char* pData = new unsigned char[sizeof(n)]; // Node verisinin binary temsili için bellek alanı oluşturuldu
+//
+//			    // n işaretçisinin bellek adresini pData'ya kopyalama
+//			memcpy(pData, &n, sizeof(n));
+//			l->insertData(sizeof(n), pData, mbr, id, pathBuffer, overflowTable);
+//		}
+		else{
+			NodePtr l = root->chooseSubtree(mbr, 0, pathBuffer);
+			// Leaf* pL = static_cast<Leaf*>(l.get());
+			// if(pL->getIdentifier()==360 ) {
+			// 	std::cerr << " fouund" <<std::endl;
+			// }
+			if (l.get() == root.get())
+					{
+						assert(root.unique());
+						root.relinquish();
+					}
+			l->insertData(dataLength, pData, mbr, id, pathBuffer, overflowTable);
+		}
 
 		delete[] overflowTable;
-		++(m_stats.m_u64Data);
+		if(id>=0) ++(m_stats.m_u64Data);  // id=-1 is split mode.
 	}
 	catch (...)
 	{
@@ -1277,6 +1570,45 @@ void SpatialIndex::RTree::RTree::insertData_impl(uint32_t dataLength, uint8_t* p
 		throw;
 	}
 }
+
+
+//void SpatialIndex::RTree::RTree::insertData_impl(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id)
+//{
+//	assert(mbr.getDimension() == m_dimension);
+//
+//	std::stack<id_type> pathBuffer;
+//	uint8_t* overflowTable = nullptr;
+//
+//	try
+//	{
+//		NodePtr root = readNode(m_rootID);
+//
+//		overflowTable = new uint8_t[root->m_level];
+//		memset(overflowTable, 0, root->m_level);
+//
+////		if (!m_initialLoading && m_treeVariant == RV_INCREMENTAL && root->m_level > 0){
+////			Index* pI = static_cast<Index*>(root.get());
+////			pI->chooseSubtreeForAppendOrSplit(dataLength, pData, mbr, id, pathBuffer,overflowTable);
+////		}
+////		else{
+//			NodePtr l = root->chooseSubtree(mbr, 0, pathBuffer);
+//			if (l.get() == root.get())
+//					{
+//						assert(root.unique());
+//						root.relinquish();
+//					}
+//			l->insertData(dataLength, pData, mbr, id, pathBuffer, overflowTable);
+////		}
+//
+//		delete[] overflowTable;
+//		if(id>=0) ++(m_stats.m_u64Data);  // id=-1 is split mode.
+//	}
+//	catch (...)
+//	{
+//		delete[] overflowTable;
+//		throw;
+//	}
+//}
 
 void SpatialIndex::RTree::RTree::insertData_impl(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, uint32_t level, uint8_t* overflowTable)
 {
@@ -1322,8 +1654,10 @@ bool SpatialIndex::RTree::RTree::deleteData_impl(const Region& mbr, id_type id)
 
 SpatialIndex::id_type SpatialIndex::RTree::RTree::writeNode(Node* n)
 {
+
 	uint8_t* buffer;
 	uint32_t dataLength;
+
 	n->storeToByteArray(&buffer, dataLength);
 
 	id_type page;
@@ -1347,7 +1681,18 @@ SpatialIndex::id_type SpatialIndex::RTree::RTree::writeNode(Node* n)
 		n->m_identifier = page;
 		++(m_stats.m_u32Nodes);
 
+#ifndef NDEBUG
+		try
+		{
+			m_stats.m_nodesInLevel[n->m_level] = m_stats.m_nodesInLevel.at(n->m_level) + 1;
+		}
+		catch(...)
+		{
+			throw Tools::IllegalStateException("writeNode: writing past the end of m_nodesInLevel.");
+		}
+#else
 		m_stats.m_nodesInLevel[n->m_level] = m_stats.m_nodesInLevel[n->m_level] + 1;
+#endif
 	}
 
 	++(m_stats.m_u64Writes);
@@ -1359,6 +1704,7 @@ SpatialIndex::id_type SpatialIndex::RTree::RTree::writeNode(Node* n)
 
 	return page;
 }
+
 
 SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page)
 {
@@ -1377,8 +1723,17 @@ SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page)
 
 	try
 	{
+		uint8_t* ptr=buffer;
 		uint32_t nodeType;
-		memcpy(&nodeType, buffer, sizeof(uint32_t));
+		memcpy(&nodeType, ptr, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		// skip m_level
+		//memcpy(&m_level, buffer, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		uint32_t numChildren;
+		memcpy(&numChildren, ptr, sizeof(uint32_t));
 
 		NodePtr n;
 
@@ -1389,7 +1744,24 @@ SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page)
 		if (n.get() == nullptr)
 		{
 			if (nodeType == PersistentIndex) n = NodePtr(new Index(this, -1, 0), &m_indexPool);
-			else if (nodeType == PersistentLeaf) n = NodePtr(new Leaf(this, -1), &m_leafPool);
+			else if (nodeType == PersistentLeaf){
+				if(numChildren <= m_leafCapacity)
+					n = NodePtr(new Leaf(this, -1), &m_leafPool);
+				else
+					n = NodePtr(new Leaf(this, -1,numChildren), &m_leafPool);
+			}
+		}
+		else if(this->m_treeVariant ==  RV_INCREMENTAL && !m_initialLoading ){  // utku: Do not disturb RSTAR and initialLoad of INCREMENTAL. Only for INCREMENTAL, maybe acquire some other small node. In such case, make some refreshment on memory
+//			if (numChildren == n.get()->m_capacity)
+//				std::cerr <<"";
+			if (numChildren > n.get()->m_capacity){  // For split of large LEAVES, We may add 1 (query) later. Reserve it.
+//				if(nodeType != PersistentLeaf)
+//					std::cerr<<" Refresh MEM !!"<< std::endl;
+				assert(nodeType == PersistentLeaf);
+				// m_leafPool.refresh(n.get(),numChildren);
+//				n = NodePtr(new Leaf(this, -1,numChildren), &m_leafPool);
+				//n = m_leafPool.acquire(numChildren);  // Search in the pool for this specific size.  another try maybe later.
+			}
 		}
 
 		//n->m_pTree = this;
@@ -1439,41 +1811,191 @@ void SpatialIndex::RTree::RTree::rangeQuery(RangeQueryType type, const IShape& q
 	std::stack<NodePtr> st;
 	NodePtr root = readNode(m_rootID);
 
+	IVisitorWithQuery* v2 = dynamic_cast<IVisitorWithQuery*>(&v);
 	if (root->m_children > 0 && query.intersectsShape(root->m_nodeMBR)) st.push(root);
 
 	while (! st.empty())
 	{
+
 		NodePtr n = st.top(); st.pop();
+
 
 		if (n->m_level == 0)
 		{
-			v.visitNode(*n);
+			if(v2 != nullptr)
+				v2->visitNodeWithQuery(*n, query);
+			else
+				v.visitNode(*n);
 
-			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
-			{
-				bool b;
-				if (type == ContainmentQuery) b = query.containsShape(*(n->m_ptrMBR[cChild]));
-				else b = query.intersectsShape(*(n->m_ptrMBR[cChild]));
 
-				if (b)
+//			if(cChild == n->m_capacity && n->m_OFchildren >0){
+			if(n->m_OFchildren >0){  // leaf icindekiler de artık OF file'da. o yuzden buna bakmak yeterli..
+
+				Tools::TemporaryFile *tf;
+				if(n->m_OFfile == ""){
+					std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+					exit(-1);
+				}
+				else{
+					tf= new Tools::TemporaryFile(n->m_OFfile);
+				}
+
+				tf->rewindForReading();
+
+				while(true){
+					try
+					{
+						ExternalSorter::Record rec;
+						rec.loadFromFile((*tf));
+						// if(rec.m_id == std::numeric_limits<id_type>::max()) break;  
+						bool b;
+						if (type == ContainmentQuery) b = query.containsShape(rec.m_r);
+						else b = query.intersectsShape(rec.m_r);
+						if (b)
+						{
+							Data data = Data(0, nullptr, rec.m_r, rec.m_id);
+							v.visitData(data);
+							++(m_stats.m_u64QueryResults);
+						}
+					}
+					catch (Tools::EndOfStreamException&)
+					{
+						break;
+					}
+				}
+				delete tf;
+			}else{
+				for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 				{
-					Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
-					v.visitData(data);
-					++(m_stats.m_u64QueryResults);
+					bool b;
+					if (type == ContainmentQuery) b = query.containsShape(*(n->m_ptrMBR[cChild]));
+					else b = query.intersectsShape(*(n->m_ptrMBR[cChild]));
+
+					if (b)
+					{
+						Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
+						v.visitData(data);
+						++(m_stats.m_u64QueryResults);
+					}
 				}
 			}
+
 		}
 		else
 		{
-			v.visitNode(*n);
+			if(v2 != nullptr)
+				v2->visitNodeWithQuery(*n, query);
+			else
+				v.visitNode(*n);
 
 			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 			{
-				if (query.intersectsShape(*(n->m_ptrMBR[cChild]))) st.push(readNode(n->m_pIdentifier[cChild]));
+				if (query.intersectsShape(*(n->m_ptrMBR[cChild]))){
+					st.push(readNode(n->m_pIdentifier[cChild]));
+				}
 			}
 		}
 	}
+
 }
+
+
+//void SpatialIndex::RTree::RTree::rangeQuery(RangeQueryType type, const IShape& query, IVisitor& v)
+//{
+//	std::stack<NodePtr> st;
+//	std::stack<NodePtr> pathBufferByNode;  // utku
+//	std::stack<id_type> pathBuffer;
+//	NodePtr root = readNode(m_rootID);
+//	pathBufferByNode.push(root);
+//
+//	IVisitorWithQuery* v2 = dynamic_cast<IVisitorWithQuery*>(&v);
+//	if (root->m_children > 0 && query.intersectsShape(root->m_nodeMBR)) st.push(root);
+//	else std::cerr<< " query is out of coverage!"<<std::endl;
+//	while (! st.empty())
+//	{
+//
+//		NodePtr n = st.top(); st.pop();
+//		NodePtr currParent = pathBufferByNode.top(); // utku
+//		auto i = currParent->m_level;
+//		while (i <= n->m_level){
+//			pathBufferByNode.pop();
+//			i++;
+//		}
+//
+//		if (n->m_level == 0)
+//		{
+//			if(v2 != nullptr)
+//				v2->visitNodeWithQuery(*n, query);
+//			else
+//				v.visitNode(*n);
+//
+//			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
+//			{
+//				bool b;
+//				if (type == ContainmentQuery) b = query.containsShape(*(n->m_ptrMBR[cChild]));
+//				else b = query.intersectsShape(*(n->m_ptrMBR[cChild]));
+//
+//				if (b)
+//				{
+//					Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
+//					v.visitData(data);
+//					++(m_stats.m_u64QueryResults);
+//				}
+//			}
+//
+//			if (m_treeVariant == RV_INCREMENTAL) {
+//				RegionPtr mbr = m_regionPool.acquire();
+//				query.getMBR(*mbr);
+//
+//				// re-set pathBuffer each time. No need but not too cost here. Maybe we may check if sibling comes we may take the same previous pathBuffer. since tree heigth is mostly small. ignore this optimization..
+//				std::stack<NodePtr> pathBufferByNode_copy;
+//				pathBufferByNode_copy = pathBufferByNode;
+//				std::stack<id_type> pathBuffer_copy;
+//
+//				i = 0;
+//				while (!pathBufferByNode_copy.empty()) {
+//					NodePtr n2 = pathBufferByNode_copy.top();
+//					pathBufferByNode_copy.pop();
+//					pathBuffer_copy.push(n2->m_identifier);
+//				}
+////			std::cerr<< " current Path: ";
+//				while (!pathBuffer_copy.empty()) {
+//					id_type nodeid = pathBuffer_copy.top();
+//					pathBuffer_copy.pop();
+////				std::cerr<< nodeid << " | ";
+//					pathBuffer.push(nodeid);
+//				}
+////			std::cerr<<n->m_identifier<< std::endl;
+//
+////				std::cout << " Query : " << (*mbr) << " stored in node: "
+////						<< n->m_identifier << std::endl;
+////				n->insertQuery(*mbr, -1, pathBuffer);
+//
+//
+//
+//				while (!pathBuffer.empty())
+//					pathBuffer.pop();
+//			}
+//		}
+//		else
+//		{
+//			pathBufferByNode.push(n); // utku
+//			if(v2 != nullptr)
+//				v2->visitNodeWithQuery(*n, query);
+//			else
+//				v.visitNode(*n);
+//
+//			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
+//			{
+//				if (query.intersectsShape(*(n->m_ptrMBR[cChild]))){
+//					st.push(readNode(n->m_pIdentifier[cChild]));
+//				}
+//			}
+//		}
+//	}
+//	while(!pathBufferByNode.empty())
+//		pathBufferByNode.pop();
+//}
 
 void SpatialIndex::RTree::RTree::selfJoinQuery(id_type id1, id_type id2, const Region& r, IVisitor& vis)
 {

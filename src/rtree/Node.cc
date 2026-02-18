@@ -5,7 +5,7 @@
  * Copyright (c) 2002, Marios Hadjieleftheriou
  *
  * All rights reserved.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -28,12 +28,15 @@
 #include <cstring>
 #include <cmath>
 #include <limits>
+#include <unistd.h>   // unlink()
 
 #include <spatialindex/SpatialIndex.h>
 
 #include "RTree.h"
 #include "Node.h"
 #include "Index.h"
+
+#include "BulkLoader.h"  //utku
 
 using namespace SpatialIndex;
 using namespace SpatialIndex::RTree;
@@ -57,7 +60,11 @@ uint32_t Node::getByteArraySize()
 		sizeof(uint32_t) +
 		(m_children * (m_pTree->m_dimension * sizeof(double) * 2 + sizeof(id_type) + sizeof(uint32_t))) +
 		m_totalDataLength +
-		(2 * m_pTree->m_dimension * sizeof(double)));
+		(2 * m_pTree->m_dimension * sizeof(double))  +
+		// sizeof(uint32_t) +  // m_qrychildren
+		// (m_qrychildren * (m_pTree->m_dimension * sizeof(double) * 2))  //m_qrychildren >0 for only leafs.
+		sizeof(uint32_t)+ strlen(m_OFfile.c_str())+1 + sizeof(uint32_t)
+		);
 }
 
 void Node::loadFromByteArray(const uint8_t* ptr)
@@ -106,7 +113,35 @@ void Node::loadFromByteArray(const uint8_t* ptr)
 	memcpy(m_nodeMBR.m_pLow, ptr, m_pTree->m_dimension * sizeof(double));
 	ptr += m_pTree->m_dimension * sizeof(double);
 	memcpy(m_nodeMBR.m_pHigh, ptr, m_pTree->m_dimension * sizeof(double));
-	//ptr += m_pTree->m_dimension * sizeof(double);
+	ptr += m_pTree->m_dimension * sizeof(double);  // utku:uncomment
+
+	// memcpy(&m_qrychildren, ptr, sizeof(uint32_t));
+	// ptr += sizeof(uint32_t);
+
+	// for (uint32_t u32Child = 0; u32Child < m_qrychildren; ++u32Child) {
+	// 	m_qryptrMBR[u32Child] = m_pTree->m_regionPool.acquire();
+	// 	*(m_qryptrMBR[u32Child]) = m_pTree->m_infiniteRegion;
+
+	// 	memcpy(m_qryptrMBR[u32Child]->m_pLow, ptr,
+	// 			m_pTree->m_dimension * sizeof(double));
+	// 	ptr += m_pTree->m_dimension * sizeof(double);
+	// 	memcpy(m_qryptrMBR[u32Child]->m_pHigh, ptr,
+	// 			m_pTree->m_dimension * sizeof(double));
+	// 	ptr += m_pTree->m_dimension * sizeof(double);
+	// }
+
+	uint32_t sizeofofname;  // includes \0
+	memcpy(&sizeofofname, ptr, sizeof(uint32_t));
+	ptr += sizeof(uint32_t);
+	char* u8arr2 = new char[sizeofofname];
+	memcpy(u8arr2, ptr, sizeofofname);
+	ptr += (sizeofofname);
+//	u8arr2[sizeofofname] = '\0';
+	m_OFfile= u8arr2;
+	delete[] u8arr2;
+
+	memcpy(&m_OFchildren, ptr, sizeof(uint32_t));
+	ptr += sizeof(uint32_t);
 }
 
 void Node::storeToByteArray(uint8_t** data, uint32_t& len)
@@ -153,9 +188,33 @@ void Node::storeToByteArray(uint8_t** data, uint32_t& len)
 	memcpy(ptr, m_nodeMBR.m_pLow, m_pTree->m_dimension * sizeof(double));
 	ptr += m_pTree->m_dimension * sizeof(double);
 	memcpy(ptr, m_nodeMBR.m_pHigh, m_pTree->m_dimension * sizeof(double));
-	//ptr += m_pTree->m_dimension * sizeof(double);
+	ptr += m_pTree->m_dimension * sizeof(double);  // utku:uncomment
 
-	assert(len == (ptr - *data) + m_pTree->m_dimension * sizeof(double));
+	// memcpy(ptr, &m_qrychildren, sizeof(uint32_t));
+	// ptr += sizeof(uint32_t);
+
+	// for (uint32_t u32Child = 0; u32Child < m_qrychildren; ++u32Child) {
+	// 	memcpy(ptr, m_qryptrMBR[u32Child]->m_pLow,
+	// 			m_pTree->m_dimension * sizeof(double));
+	// 	ptr += m_pTree->m_dimension * sizeof(double);
+	// 	memcpy(ptr, m_qryptrMBR[u32Child]->m_pHigh,
+	// 			m_pTree->m_dimension * sizeof(double));
+	// 	ptr += m_pTree->m_dimension * sizeof(double);
+	// }
+
+//	uint8_t *ofname = reinterpret_cast<uint8_t*>(const_cast<char*>(m_OFfile.c_str()));
+	uint32_t sizeofofname=strlen(m_OFfile.c_str());
+	sizeofofname++;
+	memcpy(ptr,  &sizeofofname, sizeof(uint32_t));
+	ptr += sizeof(uint32_t);
+	memcpy(ptr, m_OFfile.c_str(), sizeofofname);
+	ptr += (sizeofofname);
+
+	memcpy(ptr, &m_OFchildren, sizeof(uint32_t));
+	ptr += sizeof(uint32_t);
+
+//	assert(len == (ptr - *data) + m_pTree->m_dimension * sizeof(double));
+	assert(len == (ptr - *data));
 }
 
 //
@@ -174,9 +233,36 @@ void Node::getShape(IShape** out) const
 //
 // SpatialIndex::INode interface
 //
+
+// utku: called from outside, i.e. visitors..used for debug purposes...time-consuming..!!
 uint32_t Node::getChildrenCount() const
 {
-	return m_children;
+
+	// Use below for debug purpose..otherwise it is time-consuming..
+//	uint32_t OFchildren=0;
+//	if(m_OFfile != ""){
+//
+//		Tools::TemporaryFile *tf=new Tools::TemporaryFile(m_OFfile);
+//		tf->rewindForReading();
+//
+//		while(true){
+//			try
+//			{
+//				ExternalSorter::Record rec;
+//				rec.loadFromFile((*tf));
+//				OFchildren++;
+//			}
+//			catch (Tools::EndOfStreamException&)
+//			{
+//				break;
+//			}
+//		}
+//		delete tf;
+//	}
+//	assert(OFchildren == m_OFchildren);
+
+//	return m_children+m_OFchildren;
+	return (m_OFchildren>0) ? m_OFchildren:m_children;
 }
 
 SpatialIndex::id_type Node::getChildIdentifier(uint32_t index) const
@@ -188,7 +274,8 @@ SpatialIndex::id_type Node::getChildIdentifier(uint32_t index) const
 
 void Node::getChildShape(uint32_t index, IShape** out) const
 {
-	if (index >= m_children) throw Tools::IndexOutOfBoundsException(index);
+	if (index >= m_children)
+		throw Tools::IndexOutOfBoundsException(index);
 
 	*out = new Region(*(m_ptrMBR[index]));
 }
@@ -235,12 +322,16 @@ Node::Node(SpatialIndex::RTree::RTree* pTree, id_type id, uint32_t level, uint32
 	m_level(level),
 	m_identifier(id),
 	m_children(0),
+//	m_OFchildren(0), //utku
 	m_capacity(capacity),
 	m_pData(nullptr),
 	m_ptrMBR(nullptr),
+//	m_qryptrMBR(nullptr),  // utku
 	m_pIdentifier(nullptr),
 	m_pDataLength(nullptr),
 	m_totalDataLength(0)
+//	m_qrycapacity(5),  // utku. Iff you make this tree parameter, store it in the header.. when storeHeader()!!!!
+//	m_qrychildren(0)   // utku
 {
 	m_nodeMBR.makeInfinite(m_pTree->m_dimension);
 
@@ -250,12 +341,24 @@ Node::Node(SpatialIndex::RTree::RTree* pTree, id_type id, uint32_t level, uint32
 		m_pData = new uint8_t*[m_capacity + 1];
 		m_ptrMBR = new RegionPtr[m_capacity + 1];
 		m_pIdentifier = new id_type[m_capacity + 1];
+		m_OFfile="";
+
+		// utku
+//		if( level == 0){
+//			//			m_qryptrMBR=nullptr;
+//			m_qryptrMBR = new RegionPtr[5];  // This size is static. We do not arrange OF area for accumulated queries. Always set a number of area for queries..!!
+//									// DONOT FORGET...Burayı değiştitrsen PointerPoolNode.refresh/release de de degiştir. StoreHeader da değiştir...
+//			m_qrycapacity = 5;
+//			m_qrychildren = 0;
+//		}
+
 	}
 	catch (...)
 	{
 		delete[] m_pDataLength;
 		delete[] m_pData;
 		delete[] m_ptrMBR;
+//		if( level == 0) delete[] m_qryptrMBR;  // utku
 		delete[] m_pIdentifier;
 		throw;
 	}
@@ -287,16 +390,24 @@ void Node::insertEntry(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type
 {
 	assert(m_children < m_capacity);
 
-	m_pDataLength[m_children] = dataLength;
+//	if (m_children > m_capacity)
+//		std::cerr << "";
+	if (dataLength != std::numeric_limits<uint32_t>::max())
+		m_pDataLength[m_children] = dataLength;
+	else
+		m_pDataLength[m_children] = 0;
 	m_pData[m_children] = pData;
 	m_ptrMBR[m_children] = m_pTree->m_regionPool.acquire();
 	*(m_ptrMBR[m_children]) = mbr;
 	m_pIdentifier[m_children] = id;
 
-	m_totalDataLength += dataLength;
+	if (dataLength != std::numeric_limits<uint32_t>::max())
+		m_totalDataLength += dataLength;
+	else
+		m_totalDataLength += 0;
 	++m_children;
-
-	m_nodeMBR.combineRegion(mbr);
+	if (dataLength != std::numeric_limits<uint32_t>::max())  // signal to avoid unnecessary calculation
+		m_nodeMBR.combineRegion(mbr);
 }
 
 void Node::deleteEntry(uint32_t index)
@@ -343,14 +454,55 @@ void Node::deleteEntry(uint32_t index)
 
 bool Node::insertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::stack<id_type>& pathBuffer, uint8_t* overflowTable)
 {
-	if (m_children < m_capacity)
+	uint32_t bi_size=0;
+	Tools::TemporaryFile *bulktf= nullptr;
+	if(dataLength >0 &&(m_level==0 && m_pTree->m_initialLoading == false && m_pTree->m_treeVariant == RV_INCREMENTAL)){
+		if(id != -2) {
+					std::cerr << " Serious coordination error.!!!!!!" <<std::endl;
+					exit(-1);
+				}
+
+		std::string tfname(reinterpret_cast<const char*>(pData));//, dataLength); // uint32_t verisinin boyutunu çıkar
+
+		uint8_t* ptr=pData;
+
+		ptr += tfname.size()+1;
+		std::memcpy(&bi_size, ptr, sizeof(uint32_t));
+		bulktf= new Tools::TemporaryFile(tfname);
+	}else bi_size=1;
+//	std::string s=bulktf->getFileName();
+	if ( m_OFchildren==0 && m_children + bi_size <= m_capacity)   // m_children < m_capacity
 	{
+
+		if(id== -1) {
+			std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+			exit(-1);
+		}
 		bool adjusted = false;
 
 		// this has to happen before insertEntry modifies m_nodeMBR.
 		bool b = m_nodeMBR.containsRegion(mbr);
+		if(id >=0)
+			insertEntry(dataLength, pData, mbr, id);
+		else{ // then bulk inserting..
+			bulktf->rewindForReading();
+			while(true){
+				try
+				{
+					ExternalSorter::Record rec;
+					rec.loadFromFile(*bulktf);
+					// if(rec.m_id == std::numeric_limits<id_type>::max()) {m_nodeMBR.combineRegion(mbr); break;}  
+					insertEntry(std::numeric_limits<uint32_t>::max(), 0, rec.m_r, rec.m_id);  // std::numeric_limits<double>::max() is signal for avoiding MBR calculation
+				}
+				catch (Tools::EndOfStreamException&)
+				{
+					m_nodeMBR.combineRegion(mbr);  // use bulkMBR for only 1 nodeMBR calculation
+					unlink (bulktf->getFileName().c_str());
+					break;
+				}
+			}
 
-		insertEntry(dataLength, pData, mbr, id);
+		}
 		m_pTree->writeNode(this);
 
 		if ((! b) && (! pathBuffer.empty()))
@@ -364,8 +516,10 @@ bool Node::insertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 
 		return adjusted;
 	}
-	else if (m_pTree->m_treeVariant == RV_RSTAR && (! pathBuffer.empty()) && overflowTable[m_level] == 0)
+	// the following section is still possible for RV_INCREMENTAL, but only when initial loading !!
+	else if ((m_pTree->m_treeVariant == RV_RSTAR || (m_pTree->m_initialLoading == true && m_pTree->m_treeVariant == RV_INCREMENTAL)) && (! pathBuffer.empty()) && overflowTable[m_level] == 0)  // utku
 	{
+
 		overflowTable[m_level] = 1;
 
 		std::vector<uint32_t> vReinsert, vKeep;
@@ -454,7 +608,7 @@ bool Node::insertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 
 		m_pTree->writeNode(this);
 
-		// Diversion from R*-Tree algorithm here. First adjust
+		// Divertion from R*-Tree algorithm here. First adjust
 		// the path to the root, then start reinserts, to avoid complicated handling
 		// of changes to the same node from multiple insertions.
 		id_type cParent = pathBuffer.top(); pathBuffer.pop();
@@ -476,6 +630,116 @@ bool Node::insertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 		delete[] reinsertlen;
 
 		return true;
+	}
+
+	else if(m_level==0 && m_pTree->m_initialLoading == false && m_pTree->m_treeVariant == RV_INCREMENTAL){  // only leafs may have OF
+
+
+//			Tools::TemporaryFile *tf;
+//			if(m_OFfile == ""){
+//				tf= new Tools::TemporaryFile(Tools::APPEND);
+//				m_OFfile=tf->getFileName();
+//				tf->rewindForWriting();
+//				for (uint32_t u32Child = 0; u32Child < m_capacity; ++u32Child)
+//				{
+//					ExternalSorter::Record rInLeaf(*(m_ptrMBR[u32Child]), m_pIdentifier[u32Child], dataLength, pData, 0);
+//					rInLeaf.storeToFile(*tf);
+//				}
+//				m_OFchildren=m_children+1;
+//				m_children =1;  // Bunu 1 yapmamın bir sebebi var. split yapılacak dugumu bulurken "bir tane" id,mbr a ihtiyac var.
+//				// Iste onu findLeaf'de kullanacagim. Bu iki bilgiyi findLeaf' egonderen de MyVisitorForWL..
+//
+//				// O zaman OF olan Leaf'lerde m_children=1 ve m_OFchildren>0. Bu yüzden Node.getChildrencount() daki condition da anlasilmis oluyor..
+//			}
+//			else{
+//				tf= new Tools::TemporaryFile(m_OFfile);
+//				tf->rewindForWriting();
+//				r.storeToFile(*tf);
+//				++m_OFchildren;
+//			}
+
+		Tools::TemporaryFile *tf=nullptr;
+		if(m_OFfile == ""){
+			if (id >=0){
+				tf= new Tools::TemporaryFile(Tools::APPEND);
+				m_OFfile=tf->getFileName();
+				tf->rewindForWriting();
+				ExternalSorter::Record r(mbr, id, dataLength, pData, 0);
+				r.storeToFile(*tf);
+				for (uint32_t u32Child = 0; u32Child < m_capacity; ++u32Child)
+				{
+					ExternalSorter::Record rInLeaf(*(m_ptrMBR[u32Child]), m_pIdentifier[u32Child], dataLength, pData, 0);
+					rInLeaf.storeToFile(*tf);
+				}
+				m_OFchildren=m_children+1;
+			}else{  // assert id =-2
+
+				m_OFfile=bulktf->getFileName();
+				m_OFchildren=bi_size;
+				bulktf->rewindForWriting();
+				for (uint32_t u32Child = 0; u32Child < m_children; ++u32Child)  // m_capacity would be wrong..!!
+				{
+					ExternalSorter::Record rInLeaf(*(m_ptrMBR[u32Child]), m_pIdentifier[u32Child], 0, 0, 0);  // cannot use dataLength, pData here!!
+					rInLeaf.storeToFile(*bulktf);
+					m_OFchildren++;
+				}
+			}
+
+//			m_OFchildren=m_children+1;
+			m_children =1;  // Bunu 1 yapmamın bir sebebi var. split yapılacak dugumu bulurken "bir tane" id,mbr a ihtiyac var.
+			// Iste onu findLeaf'de kullanacagim. Bu iki bilgiyi findLeaf' egonderen de MyVisitorForWL..
+
+			// O zaman OF olan Leaf'lerde m_children=1 ve m_OFchildren>0. Bu yüzden Node.getChildrencount() daki condition da anlasilmis oluyor..
+		}
+		else{
+			tf= new Tools::TemporaryFile(m_OFfile);
+			tf->rewindForWriting();
+			if (id >=0){
+				ExternalSorter::Record r(mbr, id, dataLength, pData, 0);
+				r.storeToFile(*tf);
+				++m_OFchildren;
+			}else{
+				bulktf->rewindForReading();
+				while(true){
+					try
+					{
+						ExternalSorter::Record r;
+						r.loadFromFile(*bulktf);
+						// if(r.m_id == std::numeric_limits<id_type>::max()){unlink (bulktf->getFileName().c_str());break;}
+						r.storeToFile(*tf);
+						++m_OFchildren;
+					}
+					catch (Tools::EndOfStreamException&)
+					{
+//						bool b = m_nodeMBR.containsRegion(mbr);// this mbr is bulkMBR
+//						if(!b) m_nodeMBR.combineRegion(mbr);  // this mbr is bulkMBR
+						unlink (bulktf->getFileName().c_str());
+						break;
+					}
+				}
+
+			}
+		}
+
+
+
+			bool adjusted = false;
+
+			bool b = m_nodeMBR.containsRegion(mbr);   // // this mbr is bulkMBR   or 1 data MBR
+			if(!b) m_nodeMBR.combineRegion(mbr);
+			m_pTree->writeNode(this);
+			if ((! b) && (! pathBuffer.empty()))
+			{
+				id_type cParent = pathBuffer.top(); pathBuffer.pop();
+				NodePtr ptrN = m_pTree->readNode(cParent);
+				Index* p = static_cast<Index*>(ptrN.get());
+				p->adjustTree(this, pathBuffer);
+				adjusted = true;
+			}
+			if (tf != nullptr) delete tf;
+			if (bulktf != nullptr) delete bulktf;
+			return adjusted;
+//		}
 	}
 	else
 	{
@@ -599,6 +863,96 @@ void Node::reinsertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_typ
 	delete[] v;
 }
 
+void Node::reinsertOFData( NodePtr*& leafNodes, uint64_t numOfLeafs,std::vector<uint32_t>& reinsert, std::vector<uint32_t>& keep)
+{
+	uint64_t curLeafidx=1;   // start from 1. Because leafNodes[0] has already inside !!!
+//	for(;curLeafidx<numOfLeafs;curLeafidx++){
+//
+//		leafNodes[curLeafidx].get()->m_nodeMBR, leafNodes[curLeafidx].get()->m_identifier,
+//	}
+
+	ReinsertEntry** v = new ReinsertEntry*[m_children + numOfLeafs -1];
+
+//	m_pDataLength[m_children] = 0;
+//	m_pData[m_children] = nullptr;
+//	m_ptrMBR[m_children] = m_pTree->m_regionPool.acquire();
+//	*(m_ptrMBR[m_children]) = mbr;
+//	m_pIdentifier[m_children] = id;
+
+	PointPtr nc = m_pTree->m_pointPool.acquire();
+	m_nodeMBR.getCenter(*nc);
+	PointPtr c = m_pTree->m_pointPool.acquire();
+
+	for (uint32_t u32Child = 0; u32Child < m_children + numOfLeafs -1; ++u32Child)
+	{
+		try
+		{
+			v[u32Child] = new ReinsertEntry(u32Child, 0.0);
+		}
+		catch (...)
+		{
+			for (uint32_t i = 0; i < u32Child; ++i) delete v[i];
+			delete[] v;
+			throw;
+		}
+	}
+
+	for (uint32_t u32Child = 0; u32Child < m_children; ++u32Child)
+		{
+		m_ptrMBR[u32Child]->getCenter(*c);
+
+		// calculate relative distance of every entry from the node MBR (ignore square root.)
+		for (uint32_t cDim = 0; cDim < m_nodeMBR.m_dimension; ++cDim)
+		{
+			double d = nc->m_pCoords[cDim] - c->m_pCoords[cDim];
+			v[u32Child]->m_dist += d * d;
+		}
+	}
+
+	for (uint32_t u32Child = m_children; u32Child < m_children+ numOfLeafs -1; ++u32Child)
+		{
+		leafNodes[curLeafidx++].get()->m_nodeMBR.getCenter(*c);
+
+		// calculate relative distance of every entry from the node MBR (ignore square root.)
+		for (uint32_t cDim = 0; cDim < m_nodeMBR.m_dimension; ++cDim)
+		{
+			double d = nc->m_pCoords[cDim] - c->m_pCoords[cDim];
+			v[u32Child]->m_dist += d * d;
+		}
+	}
+
+
+
+
+	// sort by increasing order of distances.
+	::qsort(v, m_children+ numOfLeafs -1, sizeof(ReinsertEntry*), ReinsertEntry::compareReinsertEntry);
+
+	uint32_t cReinsert = static_cast<uint32_t>(std::floor((m_children+ numOfLeafs -1) * m_pTree->m_reinsertFactor));
+
+	uint32_t cCount;
+
+	for (cCount = 0; cCount < m_children+ numOfLeafs -1; ++cCount)
+	{
+		if (cCount < m_children+ numOfLeafs -1 - cReinsert)
+		{
+			// Keep all but cReinsert nodes
+			keep.push_back(v[cCount]->m_index);
+		}
+		else
+		{
+			// Remove cReinsert nodes which will be
+			// reinserted into the tree. Since our array
+			// is already sorted in ascending order this
+			// matches the order suggested in the paper.
+			reinsert.push_back(v[cCount]->m_index);
+		}
+		delete v[cCount];
+	}
+
+	delete[] v;
+}
+
+
 void Node::rtreeSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2)
 {
 	uint32_t u32Child;
@@ -640,7 +994,7 @@ void Node::rtreeSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 	{
 		if (minimumLoad - group1.size() == cRemaining)
 		{
-			// all remaining entries must be assigned to group1 to comply with minimum load requirement.
+			// all remaining entries must be assigned to group1 to comply with minimun load requirement.
 			for (u32Child = 0; u32Child < m_capacity + 1; ++u32Child)
 			{
 				if (mask[u32Child] == 0)
@@ -653,7 +1007,7 @@ void Node::rtreeSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 		}
 		else if (minimumLoad - group2.size() == cRemaining)
 		{
-			// all remaining entries must be assigned to group2 to comply with minimum load requirement.
+			// all remaining entries must be assigned to group2 to comply with minimun load requirement.
 			for (u32Child = 0; u32Child < m_capacity + 1; ++u32Child)
 			{
 				if (mask[u32Child] == 0)
@@ -694,7 +1048,7 @@ void Node::rtreeSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 						m = d;
 						md1 = d1; md2 = d2;
 						sel = u32Child;
-						if (m_pTree->m_treeVariant== RV_LINEAR || m_pTree->m_treeVariant == RV_RSTAR) break;
+						if (m_pTree->m_treeVariant== RV_LINEAR || m_pTree->m_treeVariant == RV_RSTAR || m_pTree->m_treeVariant == RV_INCREMENTAL ) break;  // utku
 					}
 				}
 			}
@@ -927,6 +1281,443 @@ void Node::rstarSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type 
 	delete[] dataHigh;
 }
 
+
+void Node::rstarOFSplit(NodePtr*& leafNodes, uint64_t numOfLeafs, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2)
+{
+	RstarSplitEntry** dataLow = nullptr;
+	RstarSplitEntry** dataHigh = nullptr;
+
+	try
+	{
+		dataLow = new RstarSplitEntry*[m_children + numOfLeafs -1];
+		dataHigh = new RstarSplitEntry*[m_children + numOfLeafs -1];
+	}
+	catch (...)
+	{
+		delete[] dataLow;
+		throw;
+	}
+
+//	m_pDataLength[m_capacity] = dataLength;
+//	m_pData[m_capacity] = pData;
+//	m_ptrMBR[m_capacity] = m_pTree->m_regionPool.acquire();
+//	*(m_ptrMBR[m_capacity]) = mbr;
+//	m_pIdentifier[m_capacity] = id;
+	// m_totalDataLength does not need to be increased here.
+
+	uint32_t nodeSPF = static_cast<uint32_t>(
+		std::floor((m_children + numOfLeafs -1) * m_pTree->m_splitDistributionFactor));
+	uint32_t splitDistribution = (m_children + numOfLeafs -1) - (2 * nodeSPF) + 2;
+
+	uint32_t u32Child = 0, cDim, cIndex;
+
+	uint64_t curLeafidx=1;   // start from 1. Because leafNodes[0] has already inside !!!
+	for (u32Child = 0; u32Child < m_children; ++u32Child)
+	{
+		try
+		{
+			dataLow[u32Child] = new RstarSplitEntry(m_ptrMBR[u32Child].get(), u32Child, 0);
+		}
+		catch (...)
+		{
+			for (uint32_t i = 0; i < u32Child; ++i) delete dataLow[i];
+			delete[] dataLow;
+			delete[] dataHigh;
+			throw;
+		}
+
+		dataHigh[u32Child] = dataLow[u32Child];
+	}
+	for (u32Child = m_children; u32Child < m_children + numOfLeafs -1; ++u32Child)
+		{
+			try
+			{
+				dataLow[u32Child] = new RstarSplitEntry(&(leafNodes[curLeafidx++].get()->m_nodeMBR), u32Child, 0);
+			}
+			catch (...)
+			{
+				for (uint32_t i = 0; i < u32Child; ++i) delete dataLow[i];
+				delete[] dataLow;
+				delete[] dataHigh;
+				throw;
+			}
+
+			dataHigh[u32Child] = dataLow[u32Child];
+	}
+
+
+	double minimumMargin = std::numeric_limits<double>::max();
+	uint32_t splitAxis = std::numeric_limits<uint32_t>::max();
+	uint32_t sortOrder = std::numeric_limits<uint32_t>::max();
+
+	// chooseSplitAxis.
+	for (cDim = 0; cDim < m_pTree->m_dimension; ++cDim)
+	{
+		::qsort(dataLow, m_children + numOfLeafs -1, sizeof(RstarSplitEntry*), RstarSplitEntry::compareLow);
+		::qsort(dataHigh, m_children + numOfLeafs -1, sizeof(RstarSplitEntry*), RstarSplitEntry::compareHigh);
+
+		// calculate sum of margins and overlap for all distributions.
+		double marginl = 0.0;
+		double marginh = 0.0;
+
+		Region bbl1, bbl2, bbh1, bbh2;
+
+		for (u32Child = 1; u32Child <= splitDistribution; ++u32Child)
+		{
+			uint32_t l = nodeSPF - 1 + u32Child;
+
+			bbl1 = *(dataLow[0]->m_pRegion);
+			bbh1 = *(dataHigh[0]->m_pRegion);
+
+			for (cIndex = 1; cIndex < l; ++cIndex)
+			{
+				bbl1.combineRegion(*(dataLow[cIndex]->m_pRegion));
+				bbh1.combineRegion(*(dataHigh[cIndex]->m_pRegion));
+			}
+
+			bbl2 = *(dataLow[l]->m_pRegion);
+			bbh2 = *(dataHigh[l]->m_pRegion);
+
+			for (cIndex = l + 1; cIndex < m_children + numOfLeafs -1; ++cIndex)
+			{
+				bbl2.combineRegion(*(dataLow[cIndex]->m_pRegion));
+				bbh2.combineRegion(*(dataHigh[cIndex]->m_pRegion));
+			}
+
+			marginl += bbl1.getMargin() + bbl2.getMargin();
+			marginh += bbh1.getMargin() + bbh2.getMargin();
+		} // for (u32Child)
+
+		double margin = std::min(marginl, marginh);
+
+		// keep minimum margin as split axis.
+		if (margin < minimumMargin)
+		{
+			minimumMargin = margin;
+			splitAxis = cDim;
+			sortOrder = (marginl < marginh) ? 0 : 1;
+		}
+
+		// increase the dimension according to which the data entries should be sorted.
+		for (u32Child = 0; u32Child < m_children + numOfLeafs -1; ++u32Child)
+		{
+			dataLow[u32Child]->m_sortDim = cDim + 1;
+		}
+	} // for (cDim)
+
+	for (u32Child = 0; u32Child < m_children + numOfLeafs -1; ++u32Child)
+	{
+		dataLow[u32Child]->m_sortDim = splitAxis;
+	}
+
+	::qsort(dataLow, m_children + numOfLeafs -1, sizeof(RstarSplitEntry*), (sortOrder == 0) ? RstarSplitEntry::compareLow : RstarSplitEntry::compareHigh);
+
+	double ma = std::numeric_limits<double>::max();
+	double mo = std::numeric_limits<double>::max();
+	uint32_t splitPoint = std::numeric_limits<uint32_t>::max();
+
+	Region bb1, bb2;
+
+	for (u32Child = 1; u32Child <= splitDistribution; ++u32Child)
+	{
+		uint32_t l = nodeSPF - 1 + u32Child;
+
+		bb1 = *(dataLow[0]->m_pRegion);
+
+		for (cIndex = 1; cIndex < l; ++cIndex)
+		{
+			bb1.combineRegion(*(dataLow[cIndex]->m_pRegion));
+		}
+
+		bb2 = *(dataLow[l]->m_pRegion);
+
+		for (cIndex = l + 1; cIndex < m_children + numOfLeafs -1; ++cIndex)
+		{
+			bb2.combineRegion(*(dataLow[cIndex]->m_pRegion));
+		}
+
+		double o = bb1.getIntersectingArea(bb2);
+
+		if (o < mo)
+		{
+			splitPoint = u32Child;
+			mo = o;
+			ma = bb1.getArea() + bb2.getArea();
+		}
+		else if (o == mo)
+		{
+			double a = bb1.getArea() + bb2.getArea();
+
+			if (a < ma)
+			{
+				splitPoint = u32Child;
+				ma = a;
+			}
+		}
+	} // for (u32Child)
+
+//	uint32_t l1 = nodeSPF - 1 + splitPoint;
+	uint32_t l1 = std::min(nodeSPF - 1 + splitPoint , m_capacity);
+	if(m_children + numOfLeafs -1 - l1 >m_capacity)
+		l1 += (m_children + numOfLeafs -1 - l1 - m_capacity);
+//	uint32_t l1 = m_capacity -1;
+	for (cIndex = 0; cIndex < l1; ++cIndex)
+	{
+		group1.push_back(dataLow[cIndex]->m_index);
+		delete dataLow[cIndex];
+	}
+
+	for (cIndex = l1; cIndex < m_children + numOfLeafs -1; ++cIndex)
+	{
+		group2.push_back(dataLow[cIndex]->m_index);
+		delete dataLow[cIndex];
+	}
+
+	delete[] dataLow;
+	delete[] dataHigh;
+}
+
+// void Node::rstarSplitByQuery(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2)
+// {
+// 	uint8_t* it=pData;
+// 				id_type firstchildId=0;
+// 				memcpy(&firstchildId, it, sizeof(id_type));
+// 				it += sizeof(id_type);
+
+// 				uint32_t totaldatasize=0;
+// 				memcpy(&totaldatasize, it, sizeof(uint32_t));
+// 				it += sizeof(uint32_t);
+// 				if(m_OFfile == ""){
+// 					std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+// 					exit(-1);
+// 				}
+// 				else if(totaldatasize-m_capacity != m_OFchildren){
+// 					std::cerr << " Serious OF error.!!!!!!" <<std::endl;
+// 					exit(-1);
+// 				}
+// 	//			Tools::TemporaryFile *tf;
+// 	//			else{
+// 	//				tf= new Tools::TemporaryFile(m_OFfile);
+// 	//			}
+// 	//
+// 	//			tf->rewindForReading();
+
+
+// 				memcpy(&m_qrychildren, it, sizeof(uint32_t));
+// 				it += sizeof(uint32_t);
+
+// 				m_qryptrMBR = new RegionPtr[m_qrychildren];  // This size is static. We do not arrange OF area for accumulated queries. Always set a number of area for queries..!!
+// 				// DONOT FORGET...to reset m_qrychildren to 0. I do not need to store it..
+
+// 				for (uint32_t u32Child = 0; u32Child < m_qrychildren; ++u32Child)
+// 				{
+// 					m_qryptrMBR[u32Child] = m_pTree->m_regionPool.acquire();
+// 					*(m_qryptrMBR[u32Child]) = m_pTree->m_infiniteRegion;
+
+// 					memcpy(m_qryptrMBR[u32Child]->m_pLow, it, m_pTree->m_dimension * sizeof(double));
+// 					it += m_pTree->m_dimension * sizeof(double);
+// 					memcpy(m_qryptrMBR[u32Child]->m_pHigh, it, m_pTree->m_dimension * sizeof(double));
+// 					it += m_pTree->m_dimension * sizeof(double);
+// 				}
+// 				//check:
+// 				for(uint32_t i=0;i<m_qrychildren;i++){
+// 					std::cout << (*m_qryptrMBR[i])<<std::endl;
+// 				}
+
+// //				m_qrychildren=0;
+
+
+
+// 	RstarSplitEntry** dataLow = nullptr;
+// 	RstarSplitEntry** dataHigh = nullptr;
+
+// //	assert (m_qrychildren == m_qrycapacity);
+// //	uint32_t capacity = m_children + m_qrychildren;
+// 	try
+// 	{
+// //		dataLow = new RstarSplitEntry*[ m_qrychildren + 1];
+// //		dataHigh = new RstarSplitEntry*[m_qrychildren + 1];
+// 		dataLow = new RstarSplitEntry*[ m_qrychildren ];
+// 		dataHigh = new RstarSplitEntry*[m_qrychildren ];
+// 	}
+// 	catch (...)
+// 	{
+// 		delete[] dataLow;
+// 		throw;
+// 	}
+// //	if (m_children == m_capacity)
+// //		m_pTree->m_leafPool.refresh(this,m_children);
+// //	// write the first query (new coming one)
+// //	m_pDataLength[m_children] = dataLength;
+// //	m_pData[m_children] = pData;
+// //	m_ptrMBR[m_children] = m_pTree->m_regionPool.acquire();
+// //	*(m_ptrMBR[m_children]) = mbr;
+// //	m_pIdentifier[m_children] = id;
+// 	// now write the others..
+// //	for(auto i=0;i<m_qrychildren; i++){
+// //		m_pDataLength[m_children] = 0;
+// //		m_pData[m_children] = nullptr;
+// //		m_ptrMBR[m_children] = m_pTree->m_regionPool.acquire();
+// //		*(m_ptrMBR[m_children]) = *m_qryptrMBR[i];
+// //		m_pIdentifier[m_children++] = -1;
+// //	}
+// //	m_qrychildren = 0;
+// //	delete[] m_qryptrMBR;  // seems no need..
+
+
+// 	uint32_t nodeSPF = static_cast<uint32_t>(
+// 		std::floor((m_qrychildren ) * m_pTree->m_splitDistributionFactor));
+// 	uint32_t splitDistribution = (m_qrychildren ) - (2 * nodeSPF) + 2;
+
+// 	uint32_t u32Child = 0, cDim, cIndex;
+
+// 	for (u32Child = 0; u32Child < m_qrychildren; ++u32Child)
+// 	{
+// 		try
+// 		{
+// 			dataLow[u32Child] = new RstarSplitEntry(m_qryptrMBR[u32Child].get(), u32Child, 0);
+// 		}
+// 		catch (...)
+// 		{
+// 			for (uint32_t i = 0; i < u32Child; ++i) delete dataLow[i];
+// 			delete[] dataLow;
+// 			delete[] dataHigh;
+// 			throw;
+// 		}
+
+// 		dataHigh[u32Child] = dataLow[u32Child];
+// 	}
+
+// 	double minimumMargin = std::numeric_limits<double>::max();
+// 	uint32_t splitAxis = std::numeric_limits<uint32_t>::max();
+// 	uint32_t sortOrder = std::numeric_limits<uint32_t>::max();
+
+// 	// chooseSplitAxis.
+// 	for (cDim = 0; cDim < m_pTree->m_dimension; ++cDim)
+// 	{
+// 		::qsort(dataLow, m_qrychildren, sizeof(RstarSplitEntry*), RstarSplitEntry::compareLow);
+// 		::qsort(dataHigh, m_qrychildren, sizeof(RstarSplitEntry*), RstarSplitEntry::compareHigh);
+
+// 		// calculate sum of margins and overlap for all distributions.
+// 		double marginl = 0.0;
+// 		double marginh = 0.0;
+
+// 		Region bbl1, bbl2, bbh1, bbh2;
+
+// 		for (u32Child = 1; u32Child <= splitDistribution; ++u32Child)
+// 		{
+// 			uint32_t l = nodeSPF - 1 + u32Child;
+
+// 			bbl1 = *(dataLow[0]->m_pRegion);
+// 			bbh1 = *(dataHigh[0]->m_pRegion);
+
+// 			for (cIndex = 1; cIndex < l; ++cIndex)
+// 			{
+// 				bbl1.combineRegion(*(dataLow[cIndex]->m_pRegion));
+// 				bbh1.combineRegion(*(dataHigh[cIndex]->m_pRegion));
+// 			}
+
+// 			bbl2 = *(dataLow[l]->m_pRegion);
+// 			bbh2 = *(dataHigh[l]->m_pRegion);
+
+// 			for (cIndex = l + 1; cIndex < m_qrychildren; ++cIndex)
+// 			{
+// 				bbl2.combineRegion(*(dataLow[cIndex]->m_pRegion));
+// 				bbh2.combineRegion(*(dataHigh[cIndex]->m_pRegion));
+// 			}
+
+// 			marginl += bbl1.getMargin() + bbl2.getMargin();
+// 			marginh += bbh1.getMargin() + bbh2.getMargin();
+// 		} // for (u32Child)
+
+// 		double margin = std::min(marginl, marginh);
+
+// 		// keep minimum margin as split axis.
+// 		if (margin < minimumMargin)
+// 		{
+// 			minimumMargin = margin;
+// 			splitAxis = cDim;
+// 			sortOrder = (marginl < marginh) ? 0 : 1;
+// 		}
+
+// 		// increase the dimension according to which the data entries should be sorted.
+// 		for (u32Child = 0; u32Child < m_qrychildren; ++u32Child)
+// 		{
+// 			dataLow[u32Child]->m_sortDim = cDim + 1;
+// 		}
+// 	} // for (cDim)
+
+// 	for (u32Child = 0; u32Child < m_qrychildren; ++u32Child)
+// 	{
+// 		dataLow[u32Child]->m_sortDim = splitAxis;
+// 	}
+
+// 	::qsort(dataLow, m_qrychildren, sizeof(RstarSplitEntry*), (sortOrder == 0) ? RstarSplitEntry::compareLow : RstarSplitEntry::compareHigh);
+
+// 	double ma = std::numeric_limits<double>::max();
+// 	double mo = std::numeric_limits<double>::max();
+// 	uint32_t splitPoint = std::numeric_limits<uint32_t>::max();
+
+// 	Region bb1, bb2;
+
+// 	for (u32Child = 1; u32Child <= splitDistribution; ++u32Child)
+// 	{
+// 		uint32_t l = nodeSPF - 1 + u32Child;
+
+// 		bb1 = *(dataLow[0]->m_pRegion);
+
+// 		for (cIndex = 1; cIndex < l; ++cIndex)
+// 		{
+// 			bb1.combineRegion(*(dataLow[cIndex]->m_pRegion));
+// 		}
+
+// 		bb2 = *(dataLow[l]->m_pRegion);
+
+// 		for (cIndex = l + 1; cIndex < m_qrychildren; ++cIndex)
+// 		{
+// 			bb2.combineRegion(*(dataLow[cIndex]->m_pRegion));
+// 		}
+
+// 		double o = bb1.getIntersectingArea(bb2);
+
+// 		if (o < mo)
+// 		{
+// 			splitPoint = u32Child;
+// 			mo = o;
+// 			ma = bb1.getArea() + bb2.getArea();
+// 		}
+// 		else if (o == mo)
+// 		{
+// 			double a = bb1.getArea() + bb2.getArea();
+
+// 			if (a < ma)
+// 			{
+// 				splitPoint = u32Child;
+// 				ma = a;
+// 			}
+// 		}
+// 	} // for (u32Child)
+
+// 	uint32_t l1 = nodeSPF - 1 + splitPoint;
+
+// 	for (cIndex = 0; cIndex < l1; ++cIndex)
+// 	{
+// 		group1.push_back(dataLow[cIndex]->m_index);
+// 		delete dataLow[cIndex];
+// 	}
+
+// 	for (cIndex = l1; cIndex < m_qrychildren; ++cIndex)
+// 	{
+// 		group2.push_back(dataLow[cIndex]->m_index);
+// 		delete dataLow[cIndex];
+// 	}
+
+// 	delete[] dataLow;
+// 	delete[] dataHigh;
+// }
+
+
+
 void Node::pickSeeds(uint32_t& index1, uint32_t& index2)
 {
 	double separation = -std::numeric_limits<double>::max();
@@ -937,6 +1728,7 @@ void Node::pickSeeds(uint32_t& index1, uint32_t& index2)
 	{
 		case RV_LINEAR:
 		case RV_RSTAR:
+		case RV_INCREMENTAL: // utku
 			for (cDim = 0; cDim < m_pTree->m_dimension; ++cDim)
 			{
 				double leastLower = m_ptrMBR[0]->m_pLow[cDim];

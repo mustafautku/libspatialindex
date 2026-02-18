@@ -5,7 +5,7 @@
  * Copyright (c) 2003, Marios Hadjieleftheriou
  *
  * All rights reserved.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -167,10 +167,20 @@ namespace SpatialIndex
 	{
 	public:
 		virtual void visitNode(const INode& in) = 0;
+//		virtual void visitNode(const INode& in, const IShape& qry);
 		virtual void visitData(const IData& in) = 0;
 		virtual void visitData(std::vector<const IData*>& v) = 0;
 		virtual ~IVisitor() = default;
 	}; // IVisitor
+
+	class SIDX_DLL IVisitorWithQuery: public IVisitor
+		{
+		public:
+			virtual void visitNodeWithQuery(const INode& in, const IShape& qry) = 0;
+			virtual void printPQ() = 0;
+			virtual ~IVisitorWithQuery() override = default;
+		}; // IVisitorWithQuery
+
 
 	class SIDX_DLL IQueryStrategy
 	{

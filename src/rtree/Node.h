@@ -70,7 +70,7 @@ namespace SpatialIndex
 			uint32_t getChildrenCount() const override;
 			id_type getChildIdentifier(uint32_t index)  const override;
 			void getChildShape(uint32_t index, IShape** out)  const override;
-                        void getChildData(uint32_t index, uint32_t& length, uint8_t** data) const override;
+			void getChildData(uint32_t index, uint32_t &length, uint8_t **data) const override;
 			uint32_t getLevel() const override;
 			bool isIndex() const override;
 			bool isLeaf() const override;
@@ -86,9 +86,17 @@ namespace SpatialIndex
 
 			virtual bool insertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::stack<id_type>& pathBuffer, uint8_t* overflowTable);
 			virtual void reinsertData(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& reinsert, std::vector<uint32_t>& keep);
+			//utku
+			virtual void reinsertOFData( NodePtr*& leafNodes, uint64_t numOfLeafs,std::vector<uint32_t>& reinsert, std::vector<uint32_t>& keep);
+
+			// bool insertQuery(Region& mbr, id_type id, std::stack<id_type>& pathBuffer);  //utku
 
 			virtual void rtreeSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2);
 			virtual void rstarSplit(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2);
+			//utku
+			// virtual void rstarSplitByQuery(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2);
+			//utku
+			virtual void rstarOFSplit(NodePtr*& leafNodes, uint64_t numOfLeafs, std::vector<uint32_t>& group1, std::vector<uint32_t>& group2);
 
 			virtual void pickSeeds(uint32_t& index1, uint32_t& index2);
 
@@ -130,6 +138,10 @@ namespace SpatialIndex
 			uint32_t* m_pDataLength{nullptr};
 
 			uint32_t m_totalDataLength{0};
+
+			// utku
+			std::string m_OFfile;
+			uint32_t m_OFchildren{0};	// The number of OF children in the BUCKET (m_OFfile) pointed by this node.
 
 			class RstarSplitEntry
 			{

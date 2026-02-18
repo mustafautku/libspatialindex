@@ -1,4 +1,7 @@
+set(TEST_BINARIES "")
+
 include_directories(../include)
+include_directories("$ENV{HOME}/PROGRAMMING/LIB-MORTON/libmorton-main/include/libmorton")
 
 set(DIR geometry)
 set(SOURCES
@@ -8,6 +11,7 @@ set(SOURCES
 foreach(test ${SOURCES})
     add_executable(test-${DIR}-${test} ${DIR}/${test}.cc)
     target_link_libraries(test-${DIR}-${test} PRIVATE spatialindex)
+    list(APPEND TEST_BINARIES test-${DIR}-${test})
 endforeach()
 
 set(DIR rtree)
@@ -16,12 +20,14 @@ set(SOURCES
         Generator
         RTreeBulkLoad
         RTreeLoad
+        RTreeLoadQuery
         RTreeQuery)
 
 
 foreach(test ${SOURCES})
     add_executable(test-${DIR}-${test} ${DIR}/${test}.cc)
     target_link_libraries(test-${DIR}-${test} PRIVATE spatialindex)
+    list(APPEND TEST_BINARIES test-${DIR}-${test})
 endforeach()
 
 set(DIR mvrtree)
@@ -36,6 +42,7 @@ set(SOURCES
 foreach(test ${SOURCES})
     add_executable(test-${DIR}-${test} ${DIR}/${test}.cc)
     target_link_libraries(test-${DIR}-${test} PRIVATE spatialindex)
+    list(APPEND TEST_BINARIES test-${DIR}-${test})
 endforeach()
 
 set(DIR tools)
@@ -47,6 +54,7 @@ set(SOURCES
 foreach(test ${SOURCES})
     add_executable(test-${DIR}-${test} ${DIR}/${test}.cc)
     target_link_libraries(test-${DIR}-${test} PRIVATE spatialindex)
+    list(APPEND TEST_BINARIES test-${DIR}-${test})
 endforeach()
 
 set(DIR tprtree)
@@ -62,7 +70,7 @@ foreach(test ${SOURCES})
     add_executable(test-${DIR}-${test}
         ${DIR}/${test}.cc ${DIR}/RandomGenerator.cc)
     target_link_libraries(test-${DIR}-${test} PRIVATE spatialindex)
-
+    list(APPEND TEST_BINARIES test-${DIR}-${test})
 endforeach()
 
 if (UNIX)
@@ -79,3 +87,7 @@ if (UNIX)
              "PATH=${CMAKE_BINARY_DIR}/test/:$ENV{PATH}")
 endif (UNIX)
 add_subdirectory(gtest)
+
+install(TARGETS ${TEST_BINARIES}
+        RUNTIME DESTINATION bin)
+

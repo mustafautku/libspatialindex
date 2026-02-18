@@ -28,13 +28,22 @@
 #include <spatialindex/tools/Tools.h>
 #include <cstring>
 #include <cmath>
+#include <chrono>
 
 #define INSERT 1
 #define DELETE 0
 #define QUERY 2
 
 
-
+class Point{
+public:
+	double m_x, m_y;
+	Point (double x, double y)
+	{
+		m_x = x;
+		m_y = y;
+	}
+};
 class Region
 {
 public:
@@ -55,6 +64,27 @@ public:
 			m_ymin > r.m_ymax || m_ymax < r.m_ymin)
 			return false;
 
+		return true;
+	}
+
+	bool contains(Point& p)
+		{
+			if (
+				m_xmin > p.m_x || m_xmax < p.m_x ||
+				m_ymin > p.m_y || m_ymax < p.m_y)
+				return false;
+
+			return true;
+		}
+
+	bool containsRegion(Region& r)
+	{
+//		for (uint32_t i = 0; i < m_dimension; ++i)
+//			{
+//				if (m_pLow[i] > r.m_pLow[i] || m_pHigh[i] < r.m_pHigh[i]) return false;
+//			}
+		if (m_xmin > r.m_xmin || m_xmax < r.m_xmax) return false;
+		if (m_ymin > r.m_ymin || m_ymax < r.m_ymax) return false;
 		return true;
 	}
 
@@ -90,7 +120,7 @@ int main(int argc, char** argv)
 {
 	if (argc != 3)
 	{
-		std::cerr << "Usage: " << argv[0] << " data_file query_type [intersection | 10NN | selfjoin]." << std::endl;
+		std::cerr << "Usage: " << argv[0] << " data_file query_type [intersection | 10NN | selfjoin | containedIn ]." << std::endl;
 		return -1;
 	}
 	uint32_t queryType = 0;
@@ -98,6 +128,7 @@ int main(int argc, char** argv)
 	if (strcmp(argv[2], "intersection") == 0) queryType = 0;
 	else if (strcmp(argv[2], "10NN") == 0) queryType = 1;
 	else if (strcmp(argv[2], "selfjoin") == 0) queryType = 2;
+	else if (strcmp(argv[2], "containedIn") == 0) queryType = 3;  // Find objects that contains the query shape
 	else
 	{
 		std::cerr << "Unknown query type." << std::endl;
@@ -116,6 +147,8 @@ int main(int argc, char** argv)
 	uint32_t op;
 	double x1, x2, y1, y2;
 
+	auto t1 = std::chrono::high_resolution_clock::now(); //utku
+
 	while (fin)
 	{
 		fin >> op >> id >> x1 >> y1 >> x2 >> y2;
@@ -132,7 +165,7 @@ int main(int argc, char** argv)
 		}
 		else if (op == QUERY)
 		{
-			//query
+			//query intersection
 			if (queryType == 0)
 			{
 				Region query = Region(x1, y1, x2, y2);
@@ -141,6 +174,7 @@ int main(int argc, char** argv)
 					if (query.intersects((*it).second)) std::cout << (*it).first << std::endl;
 				}
 			}
+			// 10NN
 			else if (queryType == 1)
 			{
 				Region query = Region(x1, y1, x1, y1);
@@ -175,7 +209,8 @@ int main(int argc, char** argv)
 					delete e;
 				}
 			}
-			else
+			// selfjoin
+			else if (queryType == 2)
 			{
 				Region query = Region(x1, y1, x2, y2);
 
@@ -196,8 +231,27 @@ int main(int argc, char** argv)
 					}
 				}
 			}
+			// containedIn
+			else if (queryType == 3)
+			{
+//				Point query = Point(x1, y1);
+				Region query = Region(x1, y1, x2, y2);
+				for (std::multimap<size_t, Region>::iterator it1 = data.begin();
+						it1 != data.end(); it1++) {
+					if (((*it1).second).containsRegion(query)) {
+						std::cout << (*it1).first << std::endl;
+					}
+				}
+			}
+			std::cout <<std::endl;
 		}
 	}
 
+	// utku:
+	auto t2 = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast < std::chrono::milliseconds
+			> (t2 - t1).count();
+	std::cerr << "Time elapsed (msec) for exhaustive execution is ( NOT exact, include loading to multimap.. : " << duration
+			<< std::endl;
 	return 0;
 }

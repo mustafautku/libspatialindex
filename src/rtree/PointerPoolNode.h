@@ -51,6 +51,7 @@ namespace Tools
 			}
 		}
 
+
 		PoolPointer<RTree::Node> acquire()
 		{
 			if (! m_pool.empty())
@@ -65,6 +66,7 @@ namespace Tools
 		{
 			if (p != nullptr)
 			{
+//				std::cout << "(release)current pool size:  " << m_pool.size() <<std::endl;
 				if (m_pool.size() < m_capacity)
 				{
 					if (p->m_pData != nullptr)
@@ -82,6 +84,10 @@ namespace Tools
 					p->m_identifier = -1;
 					p->m_children = 0;
 					p->m_totalDataLength = 0;
+					// p->m_qrychildren = 0;
+
+					// p->m_OFchildren =0;
+					p->m_OFfile ="";
 
 					m_pool.push(p);
 				}

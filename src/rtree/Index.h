@@ -46,12 +46,20 @@ namespace SpatialIndex
 			NodePtr findLeaf(const Region& mbr, id_type id, std::stack<id_type>& pathBuffer) override;
 
 			void split(uint32_t dataLength, uint8_t* pData, Region& mbr, id_type id, NodePtr& left, NodePtr& right) override;
+			//utku
+			void splitOF(NodePtr*& leafNodes, uint64_t numOfLeafs, NodePtr& left, NodePtr& right) ;
 
 			uint32_t findLeastEnlargement(const Region&) const;
 			uint32_t findLeastOverlap(const Region&) const;
 
+			// utku
+			void adjustTree(id_type id, const Region& mbr, std::stack<id_type>&, bool force = false);
 			void adjustTree(Node*, std::stack<id_type>&, bool force = false);
+
+			void adjustTree(id_type, id_type, Region&, Region&, std::stack<id_type>&, uint8_t* overflowTable);
 			void adjustTree(Node*, Node*, std::stack<id_type>&, uint8_t* overflowTable);
+
+			void adjustTree(NodePtr*& leafNodes, uint64_t numOfLeafs, std::stack<id_type>& pathBuffer, uint8_t* overflowTable);
 
 			class OverlapEntry
 			{

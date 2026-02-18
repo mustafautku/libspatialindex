@@ -60,7 +60,7 @@
 			"detail": "Builds only the active source TEST file's target using Build_active.sh"
 		},
 		{
-			"label": "_clean: Clean libspatialindex",  // clean only build directory, leave installation dir.
+			"label": "_clean: Clean build-artifact files of libspatialindex",  // clean only build directory, leave installation dir.
 			"type": "shell",
 			"command": "${workspaceFolder}/.vscode/clean.sh",
 			"group": {
@@ -276,6 +276,78 @@
 				"reveal": "always",
 				"panel": "dedicated"
 			}
+		},
+		{
+			"label": "clean runtime-artifact files",   // clean artifact files in cwd
+			"type": "shell",
+			"command": "${workspaceFolder}/test/cleanup-test-output.sh",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test", // generates many files in the test directory but will be completely cleaned up by the cleanup-test-output.sh script.
+				// "env": { bu asagidailere gerek kalmadı..cmake config de bunlar set edildi..
+				// 	"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work. test/CMakeLists.txt'de mytest1 tanımında "PATH=${CMAKE_BINARY_DIR}/test/:$ENV{PATH}") yapildi zaten
+				//  	"LD_LIBRARY_PATH": "${workspaceFolder}/mybuild/lib"	// buna da gerek klamdı. cmakke komutunda -DCMAKE_INSTALL_RPATH="$HOME/PROGRAMMING/libspatialindex/lib;$HOME/projeler/libspatialindex/mybuild/lib"  yapildi..
+				// }
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			}
+		},
+		{
+			"label": "tprtree/test2",   // built-in tests in library
+			"type": "shell",
+			"command": "${workspaceFolder}/test/tprtree/test2/run",
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test/",
+				"env": {
+					"PATH": "${workspaceFolder}/mybuild/test/:${env:PATH}",  // Ensure the test binary is in the PATH. otherwise, execs like test-rtree-Generator won't work.
+					// "LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"	
+				}
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{	// test binaries in ACCESS branch
+			"label": "test-ACCESS-rtree-RTreeBulkLoad",  // assume there exists "datafile" file in cwd.
+			"type": "shell",
+			"command": "${workspaceFolder}/mybuild/test/test-rtree-RTreeBulkLoad",
+			"args": ["datafile","../database/strtree","1","10","90","0.999","1", "1", "1000", "100" ],
+			"options": {
+				"cwd": "${env:HOME}/PROGRAMMING/tmp/data/",
+				// "env": {
+				// "LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+				// }
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
+		},
+		{// test binaries in ACCESS branch
+			"label": "test-ACCESS-rtree-Generator",  // just print data to console
+			"type": "shell",
+			"command": "${workspaceFolder}/mybuild/test/test-rtree-Generator",
+			"args": ["data", "1000", "g", "0", "0", "f", "0"],
+			"options": {
+				"cwd": "${workspaceFolder}/mybuild/test",
+				// "env": {
+				// "LD_LIBRARY_PATH": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+				// }
+			},
+			"group": {
+				"kind": "test", // "test" group is used for running tests. test,build,clean,none  bunlar keyword!!
+				"isDefault": false
+			},
+			"problemMatcher": []
 		}
 	]
 }

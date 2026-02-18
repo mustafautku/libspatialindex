@@ -171,7 +171,7 @@ source_group("C API Source Files" FILES ${SIDX_CAPI_CPP})
 
 # Standard include directory of SIDX library
 include_directories(../include)
-
+include_directories(/home/mustafautku/PROGRAMMING/LIB-MORTON/libmorton-main/include/libmorton/)
 
 ###############################################################################
 # Targets settings
@@ -181,6 +181,7 @@ set(SIDX_SOURCES
   ${SIDX_CPP})
 
 add_library(spatialindex ${SIDX_SOURCES})
+
 add_library(spatialindex_c ${SIDX_CAPI_CPP})
 
 target_link_libraries(spatialindex_c spatialindex)
@@ -246,6 +247,7 @@ endif()
 if(HAVE_BCOPY)
   target_compile_definitions(spatialindex PRIVATE -DHAVE_BCOPY=1)
 endif()
+
 
 
 if(APPLE)

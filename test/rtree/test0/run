@@ -3,7 +3,7 @@
 set -e
 
 echo Generating dataset
-test-rtree-Generator 10000 0 > d
+test-rtree-Generator 1000000 0 > d
 awk '{if ($1 != 2) print $0}' < d > data
 awk '{if ($1 == 2) print $0}' < d > queries
 rm -rf d

@@ -141,6 +141,54 @@
           "ignoreFailures": true
         }
       ]
-    }
+    },
+    {
+      "name": "Debug test-ACCESS-rtree-RTreeBulkLoad",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/mybuild/test/test-rtree-RTreeBulkLoad",
+      "args": ["datafile","../database/strtree","1","10","90","0.999","1", "1", "1000", "100" ],
+      "stopAtEntry": false,
+      "cwd": "${env:HOME}/PROGRAMMING/tmp/data/",
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {// test binaries in ACCESS branch
+			"name": "test-ACCESS-rtree-Generator",  // just print data to console
+			"type": "cppdbg",
+      "request": "launch",
+			"program": "${workspaceFolder}/mybuild/test/test-rtree-Generator",
+			"args": ["data", "1000", "g", "0", "0", "f", "0"],
+			"stopAtEntry": false,
+      "cwd": "${env:HOME}/PROGRAMMING/tmp/data/",
+      // "environment": [
+      //   {
+      //     "name": "LD_LIBRARY_PATH",
+      //     "value": "${env:HOME}/PROGRAMMING/libspatialindex/lib"
+      //   }
+      // ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+		}
   ]
 }
